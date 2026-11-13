@@ -54,6 +54,10 @@ func registerManagement() []byte {
         {"POST", "/ofm-provider/providers/save"},
         {"POST", "/ofm-provider/providers/test"},
         {"POST", "/ofm-provider/providers/disconnect"},
+        {"GET", "/ofm-provider/account-gateway"},
+        {"POST", "/ofm-provider/account-gateway/connect"},
+        {"POST", "/ofm-provider/account-gateway/test"},
+        {"POST", "/ofm-provider/account-gateway/disconnect"},
     } {
         routes = append(routes, map[string]any{"Method": spec.method, "Path": spec.path})
     }
@@ -99,6 +103,14 @@ func handleManagement(raw []byte) []byte {
         return managementResponse(200, "text/css; charset=utf-8", dashboardCSS)
     case "GET /v0/resource/plugins/ofm-provider/app.js":
         return managementResponse(200, "text/javascript; charset=utf-8", dashboardJS)
+    case "GET /v0/management/ofm-provider/account-gateway":
+        return accountBridgeStatus()
+    case "POST /v0/management/ofm-provider/account-gateway/connect":
+        return connectAccountBridge(req.Body,req.HostCallbackID,false)
+    case "POST /v0/management/ofm-provider/account-gateway/test":
+        return connectAccountBridge(req.Body,req.HostCallbackID,true)
+    case "POST /v0/management/ofm-provider/account-gateway/disconnect":
+        return disconnectAccountBridge()
     case "GET /v0/management/ofm-provider/providers":
         return listProviderResponse()
     case "POST /v0/management/ofm-provider/providers/save":
