@@ -1,0 +1,39 @@
+{
+  "providers": [
+    {
+      "id": "example-remote",
+      "name": "Example Remote API",
+      "enabled": false,
+      "base_url": "https://api.example.com/v1",
+      "format": "openai-chat",
+      "auth_kind": "apiKey",
+      "key_env": "EXAMPLE_API_KEY",
+      "headers": {},
+      "models": [
+        {
+          "id": "provider/model-one",
+          "name": "Demo Model",
+          "context_window": 128000,
+          "vision": false
+        }
+      ]
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama Local",
+      "enabled": false,
+      "base_url": "http://127.0.0.1:11434/v1",
+      "format": "openai-chat",
+      "auth_kind": "none",
+      "key_env": "",
+      "headers": {},
+      "models": [
+        {
+          "id": "llama3.1",
+          "name": "Local model",
+          "vision": false
+        }
+      ]
+    }
+  ]
+}
