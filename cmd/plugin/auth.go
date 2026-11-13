@@ -19,21 +19,35 @@ type authRefreshRequest struct {
 }
 func authPayload(raw []byte, filename string) ([]byte, bool) {
  var marker map[string]any
- if json.Unmarshal(raw, &marker) != nil { return nil, false }
- if marker["type"] != pluginName { return nil, false }
- label, _ := marker["label"].(string)
- if strings.TrimSpace(label) == "" { label = "OFM Provider" }
- if filename == "" { filename = "ofm-provider.json" }
- record := map[string]any{
-  "Provider": pluginName,
-  "ID": pluginName,
-  "FileName": filename,
-  "Label": label,
-  "StorageJSON": raw,
-  "Metadata": map[string]any{"type": pluginName},
+ if json.Unmarshal(raw, &marker) != nil || marker["type"] != pluginName {
+  return nil, false
  }
- output, _ := json.Marshal(record)
- return output, true
+ id := pluginName
+ label,_:=marker["label"].(string)
+ if strings.TrimSpace(label)=="" {label="OFM Provider"}
+ metadata:=map[string]any{"type":pluginName}
+ attributes:=map[string]string{}
+ if accountID,ok:=marker["account_id"].(string);ok && accountID!="" {
+  if !validAccountID(accountID) {return nil,false}
+  portal,_:=marker["oauth_provider"].(string)
+  if _,known:=nativeChannel(portal);!known {return nil,false}
+  id=pluginName+"-"+accountID
+  if filename==""||filename=="ofm-provider.json" {filename=id+".json"}
+  metadata["oauth_provider"]=portal
+  attributes["oauth_provider"]=portal
+ }
+ if filename=="" {filename="ofm-provider.json"}
+ record := map[string]any{
+  "Provider":pluginName,
+  "ID":id,
+  "FileName":filename,
+  "Label":label,
+  "StorageJSON":raw,
+  "Metadata":metadata,
+ }
+ if len(attributes)>0 { record["Attributes"]=attributes }
+ output,_:=json.Marshal(record)
+ return output,true
 }
 func parseHostAuth(raw []byte) []byte {
  var req authFileRequest
