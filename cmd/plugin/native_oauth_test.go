@@ -34,7 +34,7 @@ func TestMultiAuthIdentifierSchemaAndEntries(t *testing.T) {
   } `json:"entries"`
  }
  if err:=json.Unmarshal(frame.Result,&identifiers);err!=nil{t.Fatal(err)}
- if identifiers.Identifier!=pluginName||len(identifiers.Entries)!=4{t.Fatalf("identifier response: %#v",identifiers)}
+ if identifiers.Identifier!="ofm-qoder"||len(identifiers.Entries)!=4{t.Fatalf("identifier response: %#v",identifiers)}
  if len(identifiers.CredentialProviders)!=1||identifiers.CredentialProviders[0]!=pluginName{
   t.Fatalf("credential ownership missing: %#v",identifiers.CredentialProviders)
  }
