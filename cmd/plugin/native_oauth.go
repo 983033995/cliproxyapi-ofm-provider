@@ -47,13 +47,13 @@ func nativeChannel(provider string) (string,bool) {
 }
 func nativeAuthIdentifierResponse() []byte {
  entries:=make([]map[string]string,0,len(nativeAuthPortals))
- identifiers:=[]string{pluginName}
+ identifiers:=make([]string,0,len(nativeAuthPortals))
  for _,v:=range nativeAuthPortals {
   identifiers=append(identifiers,v.Identifier)
   entries=append(entries,map[string]string{"identifier":v.Identifier,"name":v.Label})
  }
  return ok(map[string]any{
-  "identifier":pluginName,
+  "identifier":nativeAuthPortals[0].Identifier,
   "identifiers":identifiers,
   "credential_providers":[]string{pluginName},
   "entries":entries,
@@ -168,7 +168,7 @@ func nativePollLogin(raw []byte) []byte {
  }
  // Refresh our model cache after the original runtime has persisted account tokens.
  // A separate host model-registration refresh may still be required.
- response:=connectAccountBridge([]byte("{}"),req.HostCallbackID,false)
+ response:=connectAccountBridgeWithAuth([]byte("{}"),req.HostCallbackID,false,false)
  syncOK:=false
  var frame envelope
  if json.Unmarshal(response,&frame)==nil && frame.OK {
