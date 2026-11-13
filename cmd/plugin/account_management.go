@@ -60,7 +60,13 @@ func connectAccountBridge(raw []byte, callbackID string, testOnly bool) []byte {
  secrets,err:=readSecretsUnlocked()
  if err!=nil{configMu.Unlock();return managementError(500,"credential_error","读取密钥失败")}
  savedKey:=accountKeyUnlocked(secrets)
- if old.BaseURL!="" && old.BaseURL!=safeURL {savedKey=""}
+ if old.BaseURL!="" && old.BaseURL!=safeURL {
+  if req.ForwardKey=="" {
+   configMu.Unlock()
+   return managementError(409,"confirm_server_repoint","服务器内部账号服务地址改变时必须重新提供 Forward Key，避免泄露已有密钥")
+  }
+  savedKey=""
+ }
  key:=resolveGatewayKey(req.ForwardKey,savedKey)
  configMu.Unlock()
  if key=="" {return managementError(400,"missing_credential","请输入独立服务 API 接入页提供的 Forward Key")}
