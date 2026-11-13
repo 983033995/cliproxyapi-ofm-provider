@@ -42,6 +42,9 @@ func parseGatewayModels(body []byte) ([]accountModel,error) {
  return filterChannelModels(catalog)
 }
 func connectAccountBridge(raw []byte, callbackID string, testOnly bool) []byte {
+ return connectAccountBridgeWithAuth(raw,callbackID,testOnly,true)
+}
+func connectAccountBridgeWithAuth(raw []byte, callbackID string, testOnly bool, createHostMarker bool) []byte {
  if len(raw)>64<<10{return managementError(413,"too_large","请求内容过大")}
  var req accountBridgeMutation
  if err:=json.Unmarshal(raw,&req);err!=nil{return managementError(400,"bad_request","JSON 请求格式错误")}
@@ -108,15 +111,19 @@ func connectAccountBridge(raw []byte, callbackID string, testOnly bool) []byte {
   return managementError(500,"save_error","无法保存模型清单")
  }
  replaceAccounts(updated)
- // Keep host auth marker up to date; does not copy upstream credentials.
- // Host callback runs within the authenticated management request scope.
- var saved struct{ Name string; Path string }
- authErr:=hostCall("host.auth.save",map[string]any{
-  "Name":"ofm-provider.json",
-  "JSON":json.RawMessage(`{"type":"ofm-provider","label":"OFM Account Channel Bridge"}`),
- },&saved)
+ // Native CLIProxyAPI OAuth stores a unique per-account auth marker after PollLogin.
+ // Creating another generic host auth would duplicate credentials and route owners.
+ authReady:=true
+ if createHostMarker {
+  var saved struct{ Name string; Path string }
+  authErr:=hostCall("host.auth.save",map[string]any{
+   "Name":"ofm-provider.json",
+   "JSON":json.RawMessage(`{"type":"ofm-provider","label":"OFM Account Channel Bridge"}`),
+  },&saved)
+  authReady=authErr==nil
+ }
  return managementJSON(200,map[string]any{
-  "ok":true,"model_count":len(models),"host_auth_ready":authErr==nil,
+  "ok":true,"model_count":len(models),"host_auth_ready":authReady,
   "reload_required":true,
   "message":"账号服务连接成功；已同步账号渠道模型。若新增模型未出现，请重载 CLIProxyAPI。",
  })

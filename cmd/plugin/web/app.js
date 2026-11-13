@@ -3,19 +3,21 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const path = "/v0/management/ofm-provider/providers";
-  const model = {key: "", providers: [], filter: "all", query: "", tab: "accounts", selected: null, gateway: null, pendingLogin: null};
+  const model = {key: "", providers: [], filter: "all", query: "", tab: "accounts", selected: null, gateway: null, pendingLogin: null, channelStatuses: {}};
+  let authPollTimer = null;
+  let authPollInFlight = false;
   const secure = location.protocol === "https:" || ["127.0.0.1", "localhost", "::1", "[::1]"].includes(location.hostname);
   const accountChannels = [
-    ["LobsterAI", "有道", "需要账号授权及积分接口"],
-    ["Qoder", "阿里系", "需要账号授权及积分接口"],
-    ["Qoder 中国版", "阿里系", "需要账号授权及积分接口"],
-    ["TRAE", "字节", "需要独立客户端账号适配"],
-    ["Cline", "Cline", "需要独立账号授权适配"],
-    ["Loomy", "讯飞", "需要独立账号授权适配"],
-    ["Raccoon", "商汤", "需要独立账号授权适配"],
-    ["MiniMax Code", "MiniMax", "需要官方授权与额度接口"],
-    ["ZCode", "智谱", "需要独立账号授权适配"],
-    ["Gemini Code Assist", "Google", "需要独立 OAuth 授权适配"]
+    ["LobsterAI", "有道", "回环 OAuth 授权，需要服务器端回调适配"],
+    ["Qoder", "阿里系", "设备码授权 · 登录结果由服务器自动确认"],
+    ["Qoder 中国版", "阿里系", "设备码授权 · 支持远程浏览器登录"],
+    ["TRAE", "字节", "固定回环地址 OAuth 回调，远程适配待完成"],
+    ["Cline", "Cline", "设备码授权 · 支持远程浏览器登录"],
+    ["Loomy", "讯飞", "微信扫码登录需要服务端二维码载体适配"],
+    ["Raccoon", "商汤", "微信扫码及短信登录需要服务端回调适配"],
+    ["MiniMax Code", "MiniMax", "OAuth 设备码及 PKCE · 支持远程浏览器授权"],
+    ["ZCode", "智谱", "浏览器及验证码交互待服务器适配"],
+    ["Gemini Code Assist", "Google", "原生应用回环 OAuth 回调，远程适配待完成"]
   ];
 
   const clear = (node) => { while (node.firstChild) node.removeChild(node.firstChild); };
@@ -31,6 +33,8 @@
   function apiUrl(action) { return action ? path + "/" + action : path; }
   function message(id, content) { $(id).textContent = content || ""; }
   function showLogin(error) {
+    stopAuthPolling();
+    model.pendingLogin = null;
     model.key = "";
     $("management-key").value = "";
     message("credentials-error", error || "");
@@ -89,7 +93,12 @@
     txt.append(el("h3", "", p.name || p.id), el("div", "subheading", planned ? p.owner : p.id));
     ident.append(avatar, txt);
     const status = badges(p);
-    if (planned) { status[0] = (p.models || []).length ? "已同步模型" : "待登录/同步"; status[1] = (p.models || []).length ? "tag live" : "tag"; }
+    if (planned) {
+      const activeAccounts = p.accountStatus?.accounts_enabled ?? 0;
+      const registered = p.accountStatus?.accounts_total ?? 0;
+      status[0] = activeAccounts ? "已登记 " + activeAccounts + " 账号" : registered ? "账号已禁用" : "未授权";
+      status[1] = activeAccounts ? "tag live" : "tag";
+    }
     const tag = el("span", status[1], status[0]);
     top.append(ident, tag);
 
@@ -99,6 +108,12 @@
     const modelCount = el("span", "", "模型 ");
     modelCount.append(el("b", "", String((p.models || []).length)));
     metrics.append(modelCount);
+    if (planned) {
+      const accounts = el("span", "", "账号 ");
+      const count = Number(p.accountStatus?.accounts_total ?? 0);
+      accounts.append(el("b", "", String(count)));
+      metrics.append(accounts);
+    }
     if (!planned) {
       const key = el("span", "", "凭据 ");
       key.append(el("b", p.credential_present ? "ok" : "", p.auth_kind === "none" ? "不需要" :
@@ -158,8 +173,9 @@
     accountChannels.forEach((a, index) => {
       const models = synced.filter((m) => prefixes[index].includes(String(m.id || "").split("/")[0].toLowerCase()));
       const providerID = prefixes[index][0];
+      const accountStatus = model.channelStatuses?.[providerID] || null;
       box.append(card({
-        id: "account-" + index, providerID,
+        id: "account-" + index, providerID, accountStatus,
         remoteLogin: remoteLoginIds.has(providerID),
         name: a[0], owner: a[1], description: a[2],
         format: "account-channel", supported: false, enabled: models.length > 0,
@@ -293,7 +309,15 @@
     $("active").textContent = data.enabled ? "正常" : "未连接";
     $("available").textContent = String(data.connected_models || 0);
     renderAccounts();
+    try { await refreshChannelStatus(); }
+    catch (err) { message("gateway-error", "账号池状态暂不可读取：" + err.message); }
     return data;
+  }
+  async function refreshChannelStatus() {
+    const result = await gatewayRequest("channels/status");
+    model.channelStatuses = result.statuses || {};
+    renderAccounts();
+    return result;
   }
   async function connectGateway() {
     message("gateway-error", "");
@@ -322,48 +346,166 @@
     } catch (err) { message("gateway-error", err.message); }
   }
 
+  async function hostOAuthRequest(path) {
+    if (!secure) throw Error("远程 OAuth 管理要求 HTTPS");
+    const res = await fetch("/v8/management/oauth/" + path, {
+      method:"GET", headers:{"X-Management-Key":model.key,"Accept":"application/json"},
+      cache:"no-store",credentials:"same-origin",redirect:"error"
+    });
+    if (res.status === 401 || res.status === 403) {
+      showLogin("CLIProxyAPI OAuth 管理接口需要重新认证");
+      throw Error("CLIProxyAPI 原生 OAuth 管理接口未授权");
+    }
+    let payload;
+    try { payload = await res.json(); } catch (_) { throw Error("CLIProxyAPI OAuth 接口响应不是 JSON"); }
+    if (!res.ok) {
+      throw Error(payload.error || "原生 OAuth 接口不可用，HTTP " + res.status);
+    }
+    return payload;
+  }
+  async function startHostOAuth(provider) {
+    const id = "ofm-" + provider;
+    const result = await hostOAuthRequest("auth-url?provider=" + encodeURIComponent(id) + "&is_webui=true");
+    if (result.status !== "ok" || !result.url || !result.state)
+      throw Error(result.error || "CLIProxyAPI 未返回有效的授权链接与登录会话状态");
+    return {login_url:result.url, oauth_state:result.state, native:true};
+  }
+  async function pollHostOAuth(state) {
+    const result = await hostOAuthRequest("status?state=" + encodeURIComponent(state));
+    if (result.status === "wait" || result.status === "pending")
+      return {state:"pending",message:"等待账号完成登录；由 CLIProxyAPI 正在轮询原生授权状态"};
+    if (result.status === "ok")
+      return {state:"authorized",message:"CLIProxyAPI 已保存授权记录",native:true};
+    if (result.status === "error")
+      return {state:"failed",message:result.error || "原生 OAuth 授权失败"};
+    return {state:"pending",message:"等待 CLIProxyAPI 更新登录状态"};
+  }
+
+  function stopAuthPolling() {
+    if (authPollTimer !== null) clearTimeout(authPollTimer);
+    authPollTimer = null;
+  }
+  function scheduleAuthPoll(delay = 4000) {
+    stopAuthPolling();
+    if (!model.pendingLogin) return;
+    authPollTimer = setTimeout(() => { void pollServerLogin(); }, delay);
+  }
+  function secureAuthorizationLink(url) {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+        parsed.hash || !parsed.hostname ||
+        ["localhost","127.0.0.1","::1","[::1]"].includes(parsed.hostname.toLowerCase()) ||
+        parsed.hostname.endsWith(".local")) throw Error("授权服务没有返回可远程打开的安全 HTTPS 地址");
+    return parsed.href;
+  }
   async function beginServerLogin(providerID, providerName) {
+    stopAuthPolling();
+    model.pendingLogin = null;
     $("account-auth-panel").hidden = false;
     $("account-auth-heading").textContent = "添加 " + providerName + " 账号";
     $("account-auth-link").hidden = true;
     $("account-login-poll").disabled = true;
     $("account-auth-refresh").disabled = false;
-    model.pendingLogin = null;
     message("gateway-error", "");
-    message("account-auth-message", "正在向服务器申请设备码授权…");
-    try {
-      const response = await gatewayRequest("login/start", {provider: providerID});
-      const authURL = new URL(response.login_url);
-      if (authURL.protocol !== "https:" || authURL.hostname === "localhost" || authURL.username || authURL.password) {
-        throw Error("服务器返回了不安全的授权链接");
+    message("account-auth-message", "正在向服务器请求正式授权链接…");
+
+    // Open synchronously on the click gesture to avoid browser popup blockers.
+    // If it is blocked, the explicit link below remains the reliable fallback.
+    let popup = null;
+    if (model.gateway?.credential_present) {
+      popup = window.open("about:blank", "_blank");
+      if (popup) {
+        try {
+          popup.opener = null;
+          popup.document.title = "正在打开账号授权…";
+          popup.document.body.textContent = "正在向服务器请求账号授权链接，请在此页面完成授权。";
+        } catch (_) { /* user/browser may close the popup */ }
       }
-      model.pendingLogin = {provider: providerID, name: providerName, accountID: response.account_id};
-      $("account-auth-link").href = response.login_url;
+    }
+    try {
+      // Use CLIProxyAPI v8's built-in OAuth login lifecycle and callback/session
+      // persistence, not an isolated fake "authorization" button.
+      const response = await startHostOAuth(providerID);
+      const href = secureAuthorizationLink(response.login_url);
+      model.pendingLogin = {
+        provider: providerID, name: providerName, oauthState:response.oauth_state,
+        native:true, deadline:Date.now()+9*60*1000,errors:0
+      };
+      $("account-auth-link").href = href;
       $("account-auth-link").hidden = false;
       $("account-login-poll").disabled = false;
-      message("account-auth-message", "服务器已生成设备授权链接。请点击「在新窗口完成授权」，之后点击「检查授权结果」。");
-      await showServerAccounts(providerID,providerName,true);
+      if (popup && !popup.closed) {
+        try { popup.location.replace(href); }
+        catch (_) { /* link fallback is shown below */ }
+      }
+      message("account-auth-message",
+        "授权窗口已打开。完成登录后系统每 4 秒自动检查回调结果，无需手动复制 Token。若弹窗被拦截，请点击下方授权链接。");
+      void showServerAccounts(providerID, providerName, true);
+      scheduleAuthPoll(4000);
     } catch (err) {
-      message("account-auth-message", "发起授权失败：" + err.message);
+      if (popup && !popup.closed) { try { popup.close(); } catch (_) {} }
+      message("account-auth-message", "无法发起授权：" + err.message);
     }
   }
+
   async function pollServerLogin() {
-    if (!model.pendingLogin) return;
-    message("account-auth-message", "服务器正在检查授权状态…");
+    const pending = model.pendingLogin;
+    if (!pending || authPollInFlight) return;
+    if (Date.now() > pending.deadline) {
+      stopAuthPolling();
+      model.pendingLogin = null;
+      $("account-login-poll").disabled = true;
+      message("account-auth-message", "授权等待已超时，请重新点击「添加账号」发起新的授权。");
+      return;
+    }
+    authPollInFlight = true;
     try {
-      const state = await gatewayRequest("login/poll", {account_id:model.pendingLogin.accountID});
-      message("account-auth-message", state.message || "正在等待授权");
+      const state = pending.native ? await pollHostOAuth(pending.oauthState) :
+        await gatewayRequest("login/poll", {account_id: pending.accountID});
+      if (model.pendingLogin !== pending) return; // another login superseded this one
+      pending.errors = 0;
       if (state.state === "authorized") {
-        const id = model.pendingLogin.provider;
-        const name = model.pendingLogin.name;
+        stopAuthPolling();
         model.pendingLogin = null;
         $("account-auth-link").hidden = true;
         $("account-login-poll").disabled = true;
-        await showServerAccounts(id,name,true);
-        message("gateway-message", "账号授权已完成。请点击「重新同步」以加载新账号模型。");
+        message("account-auth-message", "账号授权成功，服务器已收到回调并保存账号。");
+        await showServerAccounts(pending.provider, pending.name, true);
+        await refreshGateway();
+        if (state.native) {
+          message("gateway-message",
+            "CLIProxyAPI 原生 OAuth 已确认登录并保存认证记录。账号模型目录已尝试自动刷新；若新模型未出现，请重载宿主或检查账号运行时。");
+        } else if (state.model_sync_ok) {
+          message("gateway-message",
+            "账号已自动同步 " + state.synced_models + " 个模型；CLIProxyAPI 如未显示，请重载插件或宿主。");
+        } else {
+          message("gateway-error", "账号授权成功但模型同步失败，请检查服务器账号运行时。");
+        }
+        return;
       }
-    } catch (err) { message("account-auth-message", "授权状态检查失败：" + err.message); }
+      if (state.state === "failed") {
+        stopAuthPolling();
+        model.pendingLogin = null;
+        $("account-login-poll").disabled = true;
+        message("account-auth-message", state.message || "授权失败或已经过期，请重新登录。");
+        return;
+      }
+      message("account-auth-message", "等待 " + pending.name + " 完成授权回调… 服务器正在自动检查。");
+    } catch (err) {
+      if (model.pendingLogin !== pending) return;
+      pending.errors += 1;
+      message("account-auth-message", "检查授权状态遇到问题：" + err.message);
+      if (pending.errors >= 4) {
+        stopAuthPolling();
+        message("account-auth-message", "连续检查失败，请确认服务器账号运行时正常，或点击「检查授权结果」重试。");
+        return;
+      }
+    } finally {
+      authPollInFlight = false;
+      if (model.pendingLogin === pending && pending.errors < 4 && authPollTimer === null) scheduleAuthPoll();
+    }
   }
+
   async function showServerAccounts(providerID,providerName,keepMessage=false) {
     $("account-auth-panel").hidden = false;
     $("account-auth-heading").textContent = providerName + " · 服务器账号";
@@ -432,6 +574,7 @@
       if (!model.key) ev.preventDefault();
     });
     $("editor").addEventListener("close", () => { $("provider-key").value = ""; });
+    window.addEventListener("pagehide", stopAuthPolling);
     showLogin("");
   }
   document.addEventListener("DOMContentLoaded", init);

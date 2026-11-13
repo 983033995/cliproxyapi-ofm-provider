@@ -25,6 +25,21 @@
 
 目前优先以原项目已经提供的 [Standalone 账号运行时](https://github.com/Ebony-Vinyl/dsh-our-free-model/blob/main/packages/standalone/README.md) 作为受控服务器依赖，插件负责账号管理网关、模型注册、请求转发；后续再考虑服务器端托管式 SidecarManager 或获得正式协议许可后的原生渠道适配。此版本不是不依赖 Node 运行时的单文件插件。
 
+## 直接发起 CLIProxyAPI 原生账号授权（当前开发分支）
+
+**重点更新：** 不再将「添加账号」按钮当作仅展示的设置项。管理页对支持 Device Code 的渠道，直接向 CLIProxyAPI v8 的原生 OAuth 接口申请登录链接：
+
+```text
+/v8/management/oauth/auth-url?provider=ofm-qoder&is_webui=true
+/v8/management/oauth/status?state=<上述接口返回的 state>
+```
+
+用户点击「添加账号」时会打开真实第三方 HTTPS 授权窗口，浏览器自动轮询 CLIProxyAPI；授权确认后，插件调用 DSH Account Runtime 的 `login.poll`，并让 CLIProxyAPI 将独立、无第三方 Token 的账号认证标记写入自身凭据目录。同时自动尝试刷新模型目录（宿主可能需要重新加载模型注册）。
+
+当前原生 OAuth 入口：`ofm-qoder`、`ofm-qodercn`、`ofm-cline`、`ofm-minimax`。目标 CLIProxyAPI 需要支持 **Plugin RPC Schema v10 / MultiAuthProvider**。其他需要固定 `127.0.0.1` OAuth 回调或扫码载体的渠道，尚未实现服务器远程登录，不能假装一键完成。
+
+**仍是 Draft POC：CI 编译通过并不代表已经用真实账号完成 OAuth / 推理。** 对照 [授权协议和服务器回调能力矩阵](docs/AUTH_CALLBACK_MATRIX.md)。
+
 ## 账号远程授权能力
 
 | 账号渠道 | 服务器远程授权入口 | 说明 |
