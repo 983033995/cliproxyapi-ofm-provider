@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="referrer" content="no-referrer">
+  <title>第三方模型接入 · OFM Provider</title>
+  <link rel="stylesheet" href="/v0/resource/plugins/ofm-provider/app.css">
+  <script defer src="/v0/resource/plugins/ofm-provider/app.js"></script>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand"><div class="brandmark">O</div><span><b>OFM Provider</b><small>CLIProxyAPI 插件中心</small></span></div>
+      <div class="header-right"><span class="beta">DEVELOPMENT PREVIEW</span><button id="change-key" class="quiet">管理密钥</button></div>
+    </header>
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="alive"></span> MODEL PROVIDER HUB · V0.2</div>
+          <h1>第三方模型接入</h1>
+          <p>一处管理供应商、凭据与模型。选择供应商 → 完成授权 → 验证连接 → 启用模型。</p>
+        </div>
+        <div class="stat-row">
+          <div class="stat"><strong id="total">—</strong><span>提供商</span></div>
+          <div class="stat"><strong id="active">—</strong><span>已启用</span></div>
+          <div class="stat"><strong id="available">—</strong><span>可配置</span></div>
+        </div>
+      </section>
+      <section class="notice"><div class="notice-icon">i</div><p>账号登录、积分签到、余额查询依赖各供应商的正式授权接口，尚未实现的渠道会明确标注为「待适配」。连接测试只验证模型目录接口，不表示模型生成已经可用。启用/停用后的模型清单可能需要重载 CLIProxyAPI。</p></section>
+      <nav class="tabbar" aria-label="供应商类别">
+        <button class="tab is-active" data-tab="providers">API / 本地模型 <span id="tab-count">—</span></button>
+        <button class="tab" data-tab="accounts">账号授权渠道 <span class="mini-tag">规划中</span></button>
+      </nav>
+      <section id="provider-section">
+        <div class="toolbar">
+          <div class="searchfield"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索服务商、模型或类型…" aria-label="搜索提供商"></div>
+          <div class="filters" aria-label="筛选提供商">
+            <button class="chip selected" data-filter="all">全部</button>
+            <button class="chip" data-filter="connected">已启用</button>
+            <button class="chip" data-filter="ready">可接入</button>
+            <button class="chip" data-filter="unsupported">待适配</button>
+          </div>
+        </div>
+        <div class="section-heading"><h2>模型供应商</h2><span id="visible-count">—</span></div>
+        <div id="providers" class="provider-grid" aria-live="polite"></div>
+        <div id="empty" class="empty" hidden>没有符合条件的供应商。</div>
+      </section>
+      <section id="account-section" hidden>
+        <div class="section-heading"><h2>账号授权渠道</h2><span>按照官方授权能力逐个接入</span></div>
+        <p class="hint">这些是独立于标准 API Key 的桌面账号/订阅渠道，目前只展示计划，不代表已支持登录、签到或积分查询。</p>
+        <div id="account-grid" class="provider-grid"></div>
+      </section>
+    </main>
+    <footer><span>OFM Provider · 独立 CLIProxyAPI 插件</span><a target="_blank" rel="noreferrer" href="https://github.com/983033995/cliproxyapi-ofm-provider">GitHub 项目</a></footer>
+  </div>
+  <dialog id="credentials" class="modal">
+    <form id="credentials-form">
+      <div class="modal-head"><div><div class="eyebrow">MANAGEMENT ACCESS</div><h2>连接管理中心</h2></div></div>
+      <p class="muted">使用 CLIProxyAPI 的 Management Key 认证。该密钥只保存在当前页面内存，关闭页面即清除。远程访问应使用 HTTPS。</p>
+      <label for="management-key">Management Key</label>
+      <input id="management-key" type="password" autocomplete="off" placeholder="输入管理密钥" required>
+      <p id="credentials-error" class="error" role="alert"></p>
+      <div class="modal-actions"><button type="submit" class="primary">进入供应商中心</button></div>
+    </form>
+  </dialog>
+  <dialog id="editor" class="modal editor">
+    <form id="editor-form">
+      <div class="modal-head">
+        <div><div class="eyebrow">PROVIDER SETTINGS</div><h2 id="editor-title">供应商配置</h2><p id="editor-subtitle" class="muted"></p></div>
+        <button id="close-editor" type="button" class="icon-button" aria-label="关闭">×</button>
+      </div>
+      <div class="fields">
+        <div class="field"><label for="base-url">API Base URL</label><input id="base-url" type="url" spellcheck="false" placeholder="https://api.example.com/v1"><small>仅支持合法的 HTTPS 服务，以及本机回环地址上的免密服务。</small></div>
+        <div class="field"><label for="key-env">环境变量名（可选）</label><input id="key-env" type="text" spellcheck="false" placeholder="PROVIDER_API_KEY"></div>
+        <div class="field" id="key-field"><label for="provider-key">API Key</label><input id="provider-key" type="password" autocomplete="off" spellcheck="false" placeholder="已配置时留空可保留原凭据"><small>新 Key 保存至服务器本地 0600 权限文件，界面不会回显；该文件不具备加密保护。</small></div>
+        <div class="field"><label for="models-input">模型列表</label><textarea id="models-input" rows="5" spellcheck="false" placeholder="每行一个模型 ID"></textarea><small>修改后需要重载 CLIProxyAPI，才能让宿主重新发现模型。</small></div>
+      </div>
+      <p id="editor-error" class="error" role="alert"></p><p id="editor-success" class="success" role="status"></p>
+      <div class="modal-actions spread">
+        <button type="button" id="disconnect" class="danger subtle">断开并禁用</button>
+        <div class="actions-right"><button type="button" id="test-connection" class="secondary">测试连接</button><button type="submit" class="primary">保存并启用</button></div>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

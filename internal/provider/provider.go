@@ -78,9 +78,8 @@ func Validate(cfg Config) (Registry, error) {
     if err := SafeURL(p.BaseURL, p.AuthKind == "none"); err != nil {
       return Registry{}, fmt.Errorf("provider %s: %w", p.ID, err)
     }
-    if p.AuthKind == "apiKey" && strings.TrimSpace(p.KeyEnv) == "" {
-      return Registry{}, fmt.Errorf("provider %s: key_env is required", p.ID)
-    }
+    // key_env is optional: the authenticated management UI can store a key
+    // in a separate local 0600 credential file instead of an environment variable.
     for k, v := range p.Headers {
       lower := strings.ToLower(strings.TrimSpace(k))
       if lower == "authorization" || lower == "x-api-key" || lower == "host" ||

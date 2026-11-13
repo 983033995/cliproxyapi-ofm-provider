@@ -14,6 +14,11 @@ jobs:
         run: go test ./...
       - name: Test pinned DSH registry importer
         run: python3 -m unittest discover -s tests -v
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate dashboard JavaScript
+        run: node --check cmd/plugin/web/app.js
       - name: Build ABI 1 c-shared plugin (linux amd64)
         env:
           CGO_ENABLED: "1"
