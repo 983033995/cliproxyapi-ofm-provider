@@ -1,0 +1,14 @@
+# Merge this into the EXISTING CLIProxyAPI v8 config.yaml.
+# Never overwrite access.api-keys or production credentials.
+plugins:
+  enabled: true
+  dir: "plugins"
+  configs:
+    ofm-provider:
+      enabled: true
+      priority: 90
+
+# Environment of the CLIProxyAPI server:
+# OFM_PROVIDERS_FILE=/absolute/path/ofm-providers.json
+# GROQ_API_KEY=your-authorized-key
+# Local-only, keyless services must use a loopback address.
