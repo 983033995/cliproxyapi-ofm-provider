@@ -1,3 +1,20 @@
+# 服务端账号渠道优先级（2026-11-13）
+
+**第一目标：**在 Linux 服务器上部署 CLIProxyAPI v8 插件，通过受 Management Key 保护的远程 HTTPS 页面授权第三方账号，并在 CLIProxyAPI 标准 API 中调用其模型。个人电脑本地模型、Ollama、个人电脑上的账号服务均不作为项目目标。
+
+- [x] 服务器内部账号运行时桥接、模型同步与 SSE 转发代码
+- [x] 远程账号列表与 Qoder/Qoder CN/Cline/MiniMax Device Code 授权接口原型
+- [x] 同服务器网络命名空间、systemd 和服务端密钥部署文档
+- [ ] 真实 CLIProxyAPI v8 宿主鉴权选择与模型加载（Issue #1）
+- [ ] 至少一个合法授权账号完成远程授权及生成、SSE 真实测试（Issue #4）
+- [ ] 无本机回环回调依赖的服务端 OAuth / 扫码流程逐家完善
+- [ ] Linux 容器部署、证书、反向代理、凭据刷新和额度查询
+- [ ] 发布版本、回滚、账号隔离与端到端用量监控
+
+当前旧 Provider/API Key 计划仅保留作次要兼容层，不应优先扩展本地免密 Provider。
+
+---
+
 # Provider Plugin Development Plan
 
 ## Goal
