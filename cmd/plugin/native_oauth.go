@@ -11,7 +11,6 @@ import (
  "encoding/hex"
  "encoding/json"
  "errors"
- "fmt"
  "sync"
  "time"
 )
@@ -76,8 +75,9 @@ func lookupNativeOAuth(state,provider string)(nativeAccountLogin,bool) {
  nativeLogins.Lock()
  defer nativeLogins.Unlock()
  p,ok:=nativeLogins.ByState[state]
- if !ok||p.Provider!=provider||time.Now().After(p.ExpiresAt){
-  if ok{delete(nativeLogins.ByState,state)}
+ if !ok||p.Provider!=provider{return nativeAccountLogin{},false}
+ if time.Now().After(p.ExpiresAt){
+  delete(nativeLogins.ByState,state)
   return nativeAccountLogin{},false
  }
  return p,true
@@ -185,5 +185,3 @@ func nativePollLogin(raw []byte) []byte {
  return ok(map[string]any{"Status":"success","Message":message,"Auth":auth})
 }
 
-// Compile-time documentation for the host's AuthLoginStart/Poll responses.
-var _ = fmt.Sprintf
