@@ -346,6 +346,41 @@
     } catch (err) { message("gateway-error", err.message); }
   }
 
+  async function hostOAuthRequest(path) {
+    if (!secure) throw Error("远程 OAuth 管理要求 HTTPS");
+    const res = await fetch("/v8/management/oauth/" + path, {
+      method:"GET", headers:{"X-Management-Key":model.key,"Accept":"application/json"},
+      cache:"no-store",credentials:"same-origin",redirect:"error"
+    });
+    if (res.status === 401 || res.status === 403) {
+      showLogin("CLIProxyAPI OAuth 管理接口需要重新认证");
+      throw Error("CLIProxyAPI 原生 OAuth 管理接口未授权");
+    }
+    let payload;
+    try { payload = await res.json(); } catch (_) { throw Error("CLIProxyAPI OAuth 接口响应不是 JSON"); }
+    if (!res.ok || payload.status === "error") {
+      throw Error(payload.error || "原生 OAuth 接口不可用，HTTP " + res.status);
+    }
+    return payload;
+  }
+  async function startHostOAuth(provider) {
+    const id = "ofm-" + provider;
+    const result = await hostOAuthRequest("auth-url?provider=" + encodeURIComponent(id) + "&is_webui=true");
+    if (result.status !== "ok" || !result.url || !result.state)
+      throw Error("CLIProxyAPI 未返回有效的授权链接与登录会话状态");
+    return {login_url:result.url, oauth_state:result.state, native:true};
+  }
+  async function pollHostOAuth(state) {
+    const result = await hostOAuthRequest("status?state=" + encodeURIComponent(state));
+    if (result.status === "wait" || result.status === "pending")
+      return {state:"pending",message:"等待账号完成登录；由 CLIProxyAPI 正在轮询原生授权状态"};
+    if (result.status === "ok")
+      return {state:"authorized",message:"CLIProxyAPI 已保存授权记录",native:true};
+    if (result.status === "error")
+      return {state:"failed",message:result.error || "原生 OAuth 授权失败"};
+    return {state:"pending",message:"等待 CLIProxyAPI 更新登录状态"};
+  }
+
   function stopAuthPolling() {
     if (authPollTimer !== null) clearTimeout(authPollTimer);
     authPollTimer = null;
@@ -388,11 +423,13 @@
       }
     }
     try {
-      const response = await gatewayRequest("login/start", {provider: providerID});
+      // Use CLIProxyAPI v8's built-in OAuth login lifecycle and callback/session
+      // persistence, not an isolated fake "authorization" button.
+      const response = await startHostOAuth(providerID);
       const href = secureAuthorizationLink(response.login_url);
       model.pendingLogin = {
-        provider: providerID, name: providerName, accountID: response.account_id,
-        deadline: Date.now() + 9 * 60 * 1000, errors: 0
+        provider: providerID, name: providerName, oauthState:response.oauth_state,
+        native:true, deadline:Date.now()+9*60*1000,errors:0
       };
       $("account-auth-link").href = href;
       $("account-auth-link").hidden = false;
@@ -423,7 +460,8 @@
     }
     authPollInFlight = true;
     try {
-      const state = await gatewayRequest("login/poll", {account_id: pending.accountID});
+      const state = pending.native ? await pollHostOAuth(pending.oauthState) :
+        await gatewayRequest("login/poll", {account_id: pending.accountID});
       if (model.pendingLogin !== pending) return; // another login superseded this one
       pending.errors = 0;
       if (state.state === "authorized") {
@@ -434,11 +472,14 @@
         message("account-auth-message", "账号授权成功，服务器已收到回调并保存账号。");
         await showServerAccounts(pending.provider, pending.name, true);
         await refreshGateway();
-        if (state.model_sync_ok) {
+        if (state.native) {
           message("gateway-message",
-            "账号已自动同步 " + state.synced_models + " 个渠道模型。CLIProxyAPI 如未显示新模型，需要重载插件或宿主。");
+            "CLIProxyAPI 原生 OAuth 已确认登录并保存认证记录。账号模型目录已尝试自动刷新；若新模型未出现，请重载宿主或检查账号运行时。");
+        } else if (state.model_sync_ok) {
+          message("gateway-message",
+            "账号已自动同步 " + state.synced_models + " 个模型；CLIProxyAPI 如未显示，请重载插件或宿主。");
         } else {
-          message("gateway-error", "账号授权成功，但模型同步失败：请检查内部运行时，再点击「重新同步」。");
+          message("gateway-error", "账号授权成功但模型同步失败，请检查服务器账号运行时。");
         }
         return;
       }
