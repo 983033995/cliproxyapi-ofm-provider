@@ -200,9 +200,21 @@ func saveProviderResponse(body []byte) []byte {
         runtime.registry = registered
         runtime.Unlock()
     }
+    // Ask the host to persist a non-secret auth marker so its normal auth selector
+    // can discover this plugin provider. Failure is visible, not silently ignored.
+    authMarker := json.RawMessage(`{"type":"ofm-provider","label":"OFM Provider"}`)
+    var saved struct{ Name string; Path string }
+    authErr := hostCall("host.auth.save", map[string]any{
+        "Name": "ofm-provider.json", "JSON": authMarker,
+    }, &saved)
+    message := "配置已保存；请重载 CLIProxyAPI，使新模型目录生效"
+    authReady := authErr == nil
+    if !authReady {
+        message += "；自动创建宿主认证记录失败，请参考 README 手工安装 auth marker"
+    }
     return managementJSON(200, map[string]any{"ok": true,
-        "message": "配置已保存；如果模型目录未更新，请重载 CLIProxyAPI 插件或重启宿主",
-        "provider": providerState(*item, secrets), "reload_required": true})
+        "message": message, "provider": providerState(*item, secrets),
+        "host_auth_ready": authReady, "reload_required": true})
 }
 
 func disconnectProviderResponse(body []byte) []byte {
