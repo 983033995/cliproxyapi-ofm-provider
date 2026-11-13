@@ -82,6 +82,54 @@ func validAccountID(id string) bool {
  }
  return true
 }
+
+var supportedAccountChannels = []string{
+ "lobsterai", "qoder", "qodercn", "trae", "cline", "loomy",
+ "raccoon", "minimax", "zcode", "gemini",
+}
+
+// Status is sourced from the sidecar account pool, not inferred from a
+// possibly-stale public model catalog. "Registered" != "usable".
+func serverChannelStatus(callbackID string) []byte {
+ value, err := accountServerRPC("provider.status",
+  map[string]any{"providers":supportedAccountChannels}, callbackID)
+ if err!=nil{return managementError(502,"account_runtime_unavailable",err.Error())}
+ var payload struct {
+  Statuses map[string]struct{
+   Accounts struct{
+    Total int `json:"total"`
+    Enabled int `json:"enabled"`
+   } `json:"accounts"`
+   Models struct{
+    Total int `json:"total"`
+    Disabled int `json:"disabled"`
+   } `json:"models"`
+  } `json:"statuses"`
+ }
+ if json.Unmarshal(value,&payload)!=nil{
+  return managementError(502,"invalid_status","账号服务状态格式错误")
+ }
+ summary:=map[string]any{}
+ for _,name:=range supportedAccountChannels {
+  item,found:=payload.Statuses[name]
+  if !found{continue}
+  // Sanitize possibly malformed remote counters; do not invent "connected".
+  if item.Accounts.Total<0||item.Accounts.Enabled<0||item.Accounts.Enabled>item.Accounts.Total||
+    item.Models.Total<0||item.Models.Disabled<0||item.Models.Disabled>item.Models.Total {continue}
+  summary[name]=map[string]any{
+   "accounts_total":item.Accounts.Total,
+   "accounts_enabled":item.Accounts.Enabled,
+   "models_total":item.Models.Total,
+   "models_disabled":item.Models.Disabled,
+   "verified":false,
+  }
+ }
+ return managementJSON(200,map[string]any{
+  "ok":true,"statuses":summary,
+  "note":"统计来自账号运行时的登记记录，并非实际登录、额度或推理成功证明",
+ })
+}
+
 func serverAccountList(raw []byte,callbackID string) []byte {
  var req serverAccountRequest
  if len(raw)>2048||json.Unmarshal(raw,&req)!=nil{return managementError(400,"bad_request","请求无效")}
@@ -145,8 +193,40 @@ func serverLoginPoll(raw []byte,callbackID string) []byte {
   result="failed"
   if state.Success{result="authorized"}
  }
+ syncOK:=false
+ syncedModels:=0
+ reloadRequired:=false
+ if result=="authorized" {
+  // Authenticate with existing server-side Forward Key and update the account
+  // model routing cache. Do not assume models appear in host /v1/models until
+  // the host has re-run model.register.
+  response:=connectAccountBridge([]byte("{}"),callbackID,false)
+  var frame envelope
+  if json.Unmarshal(response,&frame)==nil && frame.OK {
+   var management struct{
+    StatusCode int
+    Body []byte
+   }
+   if json.Unmarshal(frame.Result,&management)==nil && management.StatusCode==200 {
+    var details struct{
+     OK bool `json:"ok"`
+     ModelCount int `json:"model_count"`
+    }
+    if json.Unmarshal(management.Body,&details)==nil && details.OK {
+     syncOK=true
+     syncedModels=details.ModelCount
+     reloadRequired=true
+    }
+   }
+  }
+ }
+ message:="等待用户在授权页面确认"
+ if result=="failed"{message="登录未成功或已过期，请重试"}
+ if result=="authorized"{
+  message="账号授权完成，已自动同步账号模型；宿主模型目录可能需要重载"
+  if !syncOK {message="账号授权完成，但自动同步模型失败，请检查账号运行时连接并重试同步"}
+ }
  return managementJSON(200,map[string]any{"ok":true,"state":result,
-  "message":map[string]string{
-   "pending":"等待账号授权","failed":"账号授权失败，请重试","authorized":"账号已完成授权，请同步模型",
-  }[result]})
+  "message":message,"model_sync_ok":syncOK,
+  "synced_models":syncedModels,"reload_required":reloadRequired})
 }
