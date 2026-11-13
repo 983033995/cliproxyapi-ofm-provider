@@ -1,64 +1,90 @@
-# CLIProxyAPI OFM Provider
+# CLIProxyAPI OFM Account Provider
 
-> 一个独立的 CLIProxyAPI v8 多模型供应商插件（开发版）。从 [dsh-our-free-model](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的第三方 Provider Registry 导入供应商目录，通过一个 c-shared 插件完成模型注册与出站请求分发。
+> **服务器端 CLIProxyAPI v8 账号渠道插件 · 开发版**。优先接入 [Our Free Model](https://github.com/Ebony-Vinyl/dsh-our-free-model) 的 Qoder、Cline、MiniMax Code、TRAE、LobsterAI、Loomy、Raccoon、ZCode、Gemini 等账号渠道。目标是通过 CLIProxyAPI 管理页面完成服务器账号授权，并让已经授权的模型在 CLIProxyAPI 标准 API 中可用。
 
-## 范围
+**不以本地大模型 / Ollama / 个人电脑服务为目标。** 项目仍保留之前的 API Key Provider 兼容代码，但不是当前开发优先级。
 
-- **一个插件，多个供应商**：每个 Provider 配置独立的 base_url、API Key 环境变量、模型清单和开关。
-- 统一模型命名：`ofm/<provider-id>/<upstream-model-id>`，保留上游模型 ID 中的斜杠。
-- 第一期：`openai-chat`，支持用户合法持有 API Key 的供应商及明确配置的本地无 Key 服务。
-- 后续独立适配 Anthropic Messages、OpenAI Responses；OAuth/ADC 须使用正式授权流程。
-- 不复制 dsh 桌面 UI、本地 18899 网关或模拟官方客户端/规避上游限制的功能。
+## 服务端架构
 
-## 当前进度
+```text
+远程管理浏览器 (HTTPS)
+          │ CLIProxyAPI Management Key
+          ▼
+  CLIProxyAPI v8 + ofm-provider.so
+        │   ├─ 账号管理页面 / Device Code 授权 / 模型同步
+        │   └─ /v1/chat/completions、SSE
+        ▼
+  服务器内部 OFM Account Runtime (Node.js，默认端口 18900)
+        │   ├─ 账号凭据、续期、额度
+        │   ├─ 模型发现与执行
+        ▼
+  官方授权账号对应的供应商
+```
 
-- Go c-shared 插件开发工程、Provider 导入器和单元测试：**POC**。
-- 正式宿主模型发现、认证选择、非流式 / SSE / 冷却重试：**尚须 CLIProxyAPI v8 真实集成验收**。
-- 生产部署：**未就绪**，请勿将 CI 编译通过当作可以生产使用。
+账号服务运行在**服务器**，与 CLIProxyAPI 共享网络命名空间。它的服务器内部回环地址不是用户电脑的 localhost；**不应直接开放账号服务的管理端口到公网**。
 
-## 可视化供应商接入（开发预览）
+目前优先以原项目已经提供的 [Standalone 账号运行时](https://github.com/Ebony-Vinyl/dsh-our-free-model/blob/main/packages/standalone/README.md) 作为受控服务器依赖，插件负责账号管理网关、模型注册、请求转发；后续再考虑服务器端托管式 SidecarManager 或获得正式协议许可后的原生渠道适配。此版本不是不依赖 Node 运行时的单文件插件。
 
-现在插件通过 CLIProxyAPI v8 的 `ManagementAPI` 注册了**供应商配置入口**，无需手动编辑 JSON 来管理 API Key：
+## 账号远程授权能力
 
-1. 在 CLIProxyAPI 的 `config.yaml` 中启用 `plugins.enabled: true` 与 `plugins.configs.ofm-provider.enabled: true`，设置 `management.secret-key`；默认仅允许本机管理。
-2. 构建 `ofm-provider.so`，放入宿主 `plugins.dir` 目录，重启 CLIProxyAPI。
-3. 在宿主本机浏览器中打开：
-   `http://127.0.0.1:8317/v0/resource/plugins/ofm-provider/dashboard`
-4. 输入 CLIProxyAPI Management Key → 选择 Provider → 「接入设置」→ 输入 API Key → 「测试连接」→ 「保存并启用」。
-5. 插件将配置写入本地 `ofm-providers.json`，将 Key 写入独立 **0600 私有文件** `ofm-providers.json.secrets.json`，不会在管理接口回显 Key。该文件未加密，务必只运行在可信宿主上。
-6. **模型目录的变更需要重载插件/重启 CLIProxyAPI 才能确保宿主重新注册模型**。是否真实可调用还必须通过 Issue #1 的宿主鉴权/执行测试。
+| 账号渠道 | 服务器远程授权入口 | 说明 |
+| --- | --- | --- |
+| Qoder、Qoder 中国版 | Device Code 原型 | 已编写 `account.create / login.poll` 桥接；真实账号未验收 |
+| Cline | Device Code 原型 | 部分账号授权还可能需要 user_code；待实测 |
+| MiniMax Code | Device Code + PKCE 原型 | 真实账号未验收 |
+| TRAE、LobsterAI、Gemini | 待适配 | 上游登录依赖浏览器回调到 127.0.0.1，不能直接远程打开 |
+| Loomy、Raccoon | 待适配 | 上游扫码/短信登录页由本地回环服务器承载 |
+| ZCode | 待适配 | 需复核验证码/载体与服务器浏览器能力 |
 
-管理 API 使用 CLIProxyAPI 的 `Authorization: Bearer <management-key>` 或 `X-Management-Key` 鉴权。插件资源路由 **不鉴权**，所以只返回静态 HTML、CSS、JS；所有列出状态/配置 Key/测试/禁用操作都在 `/v0/management/ofm-provider/... ` 经宿主鉴权后执行。页面仅在 `localhost` 或 HTTPS 接受管理密钥，浏览器不会持久保存该密钥。
+已有账号服务中的模型可以经 `/v1/models` 发现并同步（仍须真实宿主验收），即使该渠道的**新增远程登录**暂未适配。已同步 ≠ 登录有效或额度可用。
 
-默认配置目录是当前运行用户的 `UserConfigDir()/cliproxyapi/ofm-providers.json`，也可通过绝对路径环境变量 `OFM_PROVIDERS_FILE` 指定。独立凭据文件可使用 `OFM_SECRETS_FILE` 指定绝对路径，禁止放入 Git 版本库。
+## 部署与配置
 
-当前可操作的是 **OpenAI Chat 格式的 API Key/本地免密 Provider**。dsh 的「白嫖模型接入」对应的是额外的账号渠道（Qoder、LobsterAI 等），需要每家适配正式授权、会话刷新、额度接口和模型协议。目前页面的「账号授权渠道」是**标明待开发的展示，不支持账号一键登录或每日签到**。CodeArts/WorkBuddy 不在当前原仓库发布版本的允许清单中，因此没有开放其登录实现。
+- [服务器专用部署说明、systemd、网络与授权注意事项](docs/SERVER_DEPLOYMENT.md)
+- [Account Bridge 早期 POC 文档](docs/ACCOUNT_CHANNEL_BRIDGE.md)
+- [CLIProxyAPI 插件基本配置](examples/cliproxyapi-config.v8.yaml)
+- [开发路线图](ROADMAP.md)
 
-## 快速开始
+服务器环境配置：
 
-```bash
-python3 tools/import_dsh_registry.py \
-  --input ./data/dsh-registry.snapshot.json \
-  --output ./ofm-providers.json \
-  --report ./migration-report.json
+```sh
+OFM_ACCOUNT_GATEWAY_URL=http://127.0.0.1:18900
+OFM_ACCOUNT_FORWARD_KEY=SET_AS_SERVER_SECRET
+OFM_PROVIDERS_FILE=/var/lib/cliproxyapi/ofm-providers.json
+OFM_SECRETS_FILE=/var/lib/cliproxyapi/ofm.secrets.json
+```
 
+其中 Forward Key 是**原服务器账号运行时**用于 /v1/models 和推理 API 的密钥；CLIProxyAPI 终端用户调用模型时使用 **CLIProxyAPI 自己的 API Key**。密钥必须保存在服务器受保护的秘密文件/环境变量中，不允许提交仓库。
+
+编译及单元检查（Linux AMD64 开发版）：
+
+```sh
 go test ./...
 python3 -m unittest discover -s tests -v
+node --check cmd/plugin/web/app.js
 CGO_ENABLED=1 go build -buildmode=c-shared -o ofm-provider.so ./cmd/plugin
 ```
 
-导入器生成的所有供应商默认禁用。现在内置管理页会自动读取编译进插件的 76 家供应商目录，手动导入脚本只作备份或独立维护使用。审查服务商 API 条款、Base URL 和模型后，可在管理页启用并粘贴 API Key，或者沿用 `key_env` 环境变量接入。
+将 `ofm-provider.so` 放入 CLIProxyAPI v8 的插件目录并启用。通过**HTTPS 反向代理**远程访问：
 
-**模型路由重要提示：** 插件新增了 `auth.identifier` / `auth.parse`，且在页面保存供应商时尝试通过 `host.auth.save` 创建不含上游密钥的 `ofm-provider.json` 记录；若宿主接口不可用，页面会明确提示。仍必须完成 [Issue #1](https://github.com/983033995/cliproxyapi-ofm-provider/issues/1) 的真实宿主认证选择与模型执行验证。API Key 只保存在环境变量或插件自身的 0600 凭据文件中，绝不存入这个 auth 标记。
+```text
+https://YOUR-CLIPROXY-HOST/v0/resource/plugins/ofm-provider/dashboard
+```
 
-在 CLIProxyAPI 宿主进程中设置 `OFM_PROVIDERS_FILE=/绝对路径/ofm-providers.json`，并将 `ofm-provider.so` 放入插件目录。参考 `examples/cliproxyapi-config.v8.yaml`。不要将 API Key 提交到版本库。
+输入 CLIProxyAPI 的 Management Key，然后在**服务器账号授权渠道**选择供应商登录，或连接/同步服务器内部账号运行时。
 
-详细开发边界和联调项见 [ROADMAP.md](ROADMAP.md)。
+## 仍待验收
 
-## 来源及许可证
+- CLIProxyAPI v8 真正加载 ABI，正确选择 `ofm-provider` auth，并将账号模型注册到宿主模型清单。
+- 远程 Device Code 授权是否被供应商实际接受；不尝试绕过上游客户端或账户限制。
+- 经 /v1/chat/completions 和 SSE 实际生成，计量和出错恢复。
+- 多账号状态及额度查询、换号、取消/流中断、重启/回滚。
+- Docker 网络命名空间、systemd 运行权限、远程 HTTPS 管理安全。
 
-- dsh commit `9aa84122`（2026-11-11）、MIT 许可；Provider Registry 源自其 `src/providers/registry.json`，并非运行时依赖。
-- CLIProxyAPI commit `1aaf56bc`（2026-11-13），`sdk/pluginabi` ABI v1，主分支 JSON Schema v10，实际生产镜像可能不同。
-- 当前仅导入元数据，不内嵌原仓库 vendor 二进制、WASM 或账号客户端代码；若分发上游元数据快照，需保留来源和版权信息。
+CI 仅代表 **Go 单元测试、前端语法和本机 ABI 编译检查**，不能替代服务器真实调用验证。PR 仍为 Draft，不应标记生产发布。
 
-**说明**：静态注册模型不等于可以实际调用；CLIProxyAPI 仍可能在授权选择阶段返回 `auth_not_found`，必须通过独立测试环境验证。
+## 来源与许可
+
+- 原账号渠道包：Jet（MIT），在 dsh `vendor/channel-pack/LICENSE` 和 `NOTICE.md` 标明出处；本仓库目前未复制其执行包或 WASM。
+- dsh 研究基线：`9aa84122`；CLIProxyAPI v8 研究基线：`1aaf56bc`，宿主版本/ABI 可能更新，必须与实际部署镜像对照。
+- 使用各家账号需遵守适用服务条款、官方授权范围与额度限制，不将「有登陆」等同「可获授权代理调用」。

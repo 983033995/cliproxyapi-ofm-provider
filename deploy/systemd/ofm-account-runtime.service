@@ -1,0 +1,24 @@
+[Unit]
+Description=OFM Account Channel Runtime (server-side internal service)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ofm
+Group=ofm
+WorkingDirectory=/opt/dsh-our-free-model
+Environment=OFM_HOME=/var/lib/ofm-accounts
+ExecStart=/usr/bin/node packages/standalone/cli.mjs --port 18900 --data-dir /var/lib/ofm-accounts
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ofm-accounts
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

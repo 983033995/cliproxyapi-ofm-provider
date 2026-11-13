@@ -135,7 +135,7 @@ func load() error {
   runtime.Lock()
   runtime.registry = loaded
   runtime.Unlock()
-  return nil
+  return loadAccounts()
 }
 func current() provider.Registry {
   runtime.RLock()
@@ -186,6 +186,16 @@ func dispatch(method string, raw []byte) []byte {
       if route.Model.Vision { info["SupportedInputModalities"] = []string{"text", "image"} }
       list = append(list, info)
     }
+    _, accountRoutes := accountRoutesSnapshot()
+    for id, route := range accountRoutes {
+      info := map[string]any{
+        "ID": id, "Object": "model", "OwnedBy": pluginName,
+        "DisplayName": route.DisplayName, "SupportedGenerationMethods": []string{"chat"},
+        "ContextLength": route.ContextWindow, "UserDefined": true,
+      }
+      if route.Vision { info["SupportedInputModalities"] = []string{"text","image"} }
+      list = append(list, info)
+    }
     return ok(map[string]any{"Provider": pluginName, "Models": list})
   case "executor.identifier":
     return ok(map[string]any{"identifier": pluginName})
@@ -193,6 +203,10 @@ func dispatch(method string, raw []byte) []byte {
     var req rpcRequest
     if err := json.Unmarshal(raw, &req); err != nil {
       return fail("request_scoped", "invalid executor request", 400)
+    }
+    stream := method == "executor.execute_stream"
+    if _, _, found := accountResolve(req.Model); found {
+      return executeGateway(req,stream)
     }
     route, found := current().Resolve(req.Model)
     if !found { return fail("model_not_found", "unknown or disabled OFM model", 404) }

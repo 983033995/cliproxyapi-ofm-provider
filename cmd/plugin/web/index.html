@@ -19,21 +19,21 @@
       <section class="hero">
         <div class="hero-copy">
           <div class="eyebrow"><span class="alive"></span> MODEL PROVIDER HUB · V0.2</div>
-          <h1>第三方模型接入</h1>
-          <p>一处管理供应商、凭据与模型。选择供应商 → 完成授权 → 验证连接 → 启用模型。</p>
+          <h1>服务器账号模型接入</h1>
+          <p>通过远程管理页添加账号，服务器负责授权状态和模型调用，统一接入 CLIProxyAPI。</p>
         </div>
         <div class="stat-row">
-          <div class="stat"><strong id="total">—</strong><span>提供商</span></div>
-          <div class="stat"><strong id="active">—</strong><span>已启用</span></div>
-          <div class="stat"><strong id="available">—</strong><span>可配置</span></div>
+          <div class="stat"><strong id="total">10</strong><span>账号渠道</span></div>
+          <div class="stat"><strong id="active">—</strong><span>运行状态</span></div>
+          <div class="stat"><strong id="available">—</strong><span>已同步模型</span></div>
         </div>
       </section>
-      <section class="notice"><div class="notice-icon">i</div><p>账号登录、积分签到、余额查询依赖各供应商的正式授权接口，尚未实现的渠道会明确标注为「待适配」。连接测试只验证模型目录接口，不表示模型生成已经可用。启用/停用后的模型清单可能需要重载 CLIProxyAPI。</p></section>
+      <section class="notice"><div class="notice-icon">i</div><p>服务器端优先采用设备码等可远程完成的授权流程。需要桌面回调、扫码载体或客户端本地服务的账号渠道会标注为「待适配」；已同步模型不代表账号当前一定有额度。启用/停用后的模型清单可能需要重载 CLIProxyAPI。</p></section>
       <nav class="tabbar" aria-label="供应商类别">
-        <button class="tab is-active" data-tab="providers">API / 本地模型 <span id="tab-count">—</span></button>
-        <button class="tab" data-tab="accounts">账号授权渠道 <span class="mini-tag">规划中</span></button>
+        <button class="tab is-active" data-tab="accounts">服务器账号授权渠道 <span class="mini-tag">重点</span></button>
+        <button class="tab" data-tab="providers">其他 API Key 渠道 <span id="tab-count">—</span></button>
       </nav>
-      <section id="provider-section">
+      <section id="provider-section" hidden>
         <div class="toolbar">
           <div class="searchfield"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索服务商、模型或类型…" aria-label="搜索提供商"></div>
           <div class="filters" aria-label="筛选提供商">
@@ -47,9 +47,38 @@
         <div id="providers" class="provider-grid" aria-live="polite"></div>
         <div id="empty" class="empty" hidden>没有符合条件的供应商。</div>
       </section>
-      <section id="account-section" hidden>
+      <section id="account-section">
         <div class="section-heading"><h2>账号授权渠道</h2><span>按照官方授权能力逐个接入</span></div>
-        <p class="hint">这些是独立于标准 API Key 的桌面账号/订阅渠道，目前只展示计划，不代表已支持登录、签到或积分查询。</p>
+        <div class="gateway-panel">
+          <div class="gateway-header">
+            <div><span class="eyebrow">ACCOUNT CHANNEL RUNTIME</span><h3>连接服务器内部账号服务</h3><p>CLIProxyAPI 插件和账号运行时均部署在服务器，浏览器只连接当前 HTTPS 管理页面，不会访问你电脑的 localhost。</p></div>
+            <span id="gateway-status" class="tag">未连接</span>
+          </div>
+          <div class="gateway-fields">
+            <div class="gateway-field"><label for="gateway-url">服务器内部服务地址（非用户电脑）</label><input id="gateway-url" type="url" spellcheck="false" placeholder="http://127.0.0.1:18900"></div>
+            <div class="gateway-field"><label for="gateway-key">服务器内部 Forward Key（可通过环境变量注入）</label><input id="gateway-key" type="password" autocomplete="off" placeholder="已配置时留空即可继续使用"></div>
+          </div>
+          <div class="gateway-actions">
+            <button class="primary" type="button" id="gateway-connect">连接并同步模型</button>
+            <button class="secondary" type="button" id="gateway-refresh">重新同步</button>
+            <button class="danger subtle" type="button" id="gateway-disconnect">断开</button>
+          </div>
+          <div class="gateway-feedback"><p id="gateway-message" class="success" role="status"></p><p id="gateway-error" class="error" role="alert"></p></div>
+          <div class="gateway-metrics"><div><strong id="gateway-model-count">0</strong><span>已同步账号模型</span></div><div><strong id="gateway-credential-status">未配置</strong><span>内部服务密钥</span></div><div><strong>服务器内部署</strong><span>不需要个人电脑运行</span></div></div>
+          <p class="hint">部署人员先在服务器启动账号运行时，并将 Forward Key 通过服务器环境变量或上方管理表单配置。账号登录直接通过下方渠道卡片发起，不需要打开服务器本地控制台。需要回环 OAuth 回调的渠道暂不能远程登录。</p>
+        </div>
+        <div class="section-heading"><h2>可接入的账号渠道</h2><span>实际状态由独立服务管理</span></div>
+        <div class="gateway-login-panel" id="account-auth-panel" hidden>
+          <div class="eyebrow">SERVER-SIDE AUTHORIZATION</div>
+          <h3 id="account-auth-heading">账号授权</h3>
+          <p id="account-auth-message" class="muted">授权信息由服务器账户运行时管理。</p>
+          <div class="gateway-actions">
+            <a id="account-auth-link" class="secondary link-button" href="#" target="_blank" rel="noopener noreferrer" hidden>在新窗口完成授权</a>
+            <button id="account-login-poll" class="secondary" type="button" disabled>检查授权结果</button>
+            <button id="account-auth-refresh" class="secondary" type="button" disabled>查看此渠道账号</button>
+          </div>
+          <div id="account-entries" class="account-entries"></div>
+        </div>
         <div id="account-grid" class="provider-grid"></div>
       </section>
     </main>
