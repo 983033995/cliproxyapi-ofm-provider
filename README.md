@@ -16,6 +16,24 @@
 - 正式宿主模型发现、认证选择、非流式 / SSE / 冷却重试：**尚须 CLIProxyAPI v8 真实集成验收**。
 - 生产部署：**未就绪**，请勿将 CI 编译通过当作可以生产使用。
 
+## 可视化供应商接入（开发预览）
+
+现在插件通过 CLIProxyAPI v8 的 \`ManagementAPI\` 注册了**供应商配置入口**，无需手动编辑 JSON 来管理 API Key：
+
+1. 在 CLIProxyAPI 的 \`config.yaml\` 中启用 \`plugins.enabled: true\` 与 \`plugins.configs.ofm-provider.enabled: true\`，设置 \`management.secret-key\`；默认仅允许本机管理。
+2. 构建 \`ofm-provider.so\`，放入宿主 \`plugins.dir\` 目录，重启 CLIProxyAPI。
+3. 在宿主本机浏览器中打开：
+   \`http://127.0.0.1:8317/v0/resource/plugins/ofm-provider/dashboard\`
+4. 输入 CLIProxyAPI Management Key → 选择 Provider → 「接入设置」→ 输入 API Key → 「测试连接」→ 「保存并启用」。
+5. 插件将配置写入本地 \`ofm-providers.json\`，将 Key 写入独立 **0600 私有文件** \`ofm-providers.json.secrets.json\`，不会在管理接口回显 Key。该文件未加密，务必只运行在可信宿主上。
+6. **模型目录的变更需要重载插件/重启 CLIProxyAPI 才能确保宿主重新注册模型**。是否真实可调用还必须通过 Issue #1 的宿主鉴权/执行测试。
+
+管理 API 使用 CLIProxyAPI 的 \`Authorization: Bearer <management-key>\` 或 \`X-Management-Key\` 鉴权。插件资源路由 **不鉴权**，所以只返回静态 HTML、CSS、JS；所有列出状态/配置 Key/测试/禁用操作都在 \`/v0/management/ofm-provider/... \` 经宿主鉴权后执行。页面仅在 \`localhost\` 或 HTTPS 接受管理密钥，浏览器不会持久保存该密钥。
+
+默认配置目录是当前运行用户的 \`UserConfigDir()/cliproxyapi/ofm-providers.json\`，也可通过绝对路径环境变量 \`OFM_PROVIDERS_FILE\` 指定。独立凭据文件可使用 \`OFM_SECRETS_FILE\` 指定绝对路径，禁止放入 Git 版本库。
+
+当前可操作的是 **OpenAI Chat 格式的 API Key/本地免密 Provider**。dsh 的「白嫖模型接入」对应的是额外的账号渠道（Qoder、LobsterAI 等），需要每家适配正式授权、会话刷新、额度接口和模型协议。目前页面的「账号授权渠道」是**标明待开发的展示，不支持账号一键登录或每日签到**。CodeArts/WorkBuddy 不在当前原仓库发布版本的允许清单中，因此没有开放其登录实现。
+
 ## 快速开始
 
 ```bash
