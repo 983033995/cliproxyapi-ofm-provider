@@ -49,7 +49,26 @@
       </section>
       <section id="account-section" hidden>
         <div class="section-heading"><h2>账号授权渠道</h2><span>按照官方授权能力逐个接入</span></div>
-        <p class="hint">这些是独立于标准 API Key 的桌面账号/订阅渠道，目前只展示计划，不代表已支持登录、签到或积分查询。</p>
+        <div class="gateway-panel">
+          <div class="gateway-header">
+            <div><span class="eyebrow">ACCOUNT CHANNEL RUNTIME</span><h3>连接账号渠道运行时</h3><p>由 Our Free Model 独立服务执行真实账号登录、续期、积分和模型请求；本插件同步其模型目录供 CLIProxyAPI 使用。</p></div>
+            <span id="gateway-status" class="tag">未连接</span>
+          </div>
+          <div class="gateway-fields">
+            <div class="gateway-field"><label for="gateway-url">独立服务地址（同机回环）</label><input id="gateway-url" type="url" spellcheck="false" placeholder="http://127.0.0.1:18900"></div>
+            <div class="gateway-field"><label for="gateway-key">Forward Key（在独立服务「API 接入」中获取）</label><input id="gateway-key" type="password" autocomplete="off" placeholder="已配置时留空即可继续使用"></div>
+          </div>
+          <div class="gateway-actions">
+            <button class="primary" type="button" id="gateway-connect">连接并同步模型</button>
+            <button class="secondary" type="button" id="gateway-refresh">重新同步</button>
+            <a id="gateway-console" class="secondary link-button" href="http://127.0.0.1:18900/" target="_blank" rel="noopener noreferrer">打开账号授权控制台</a>
+            <button class="danger subtle" type="button" id="gateway-disconnect">断开</button>
+          </div>
+          <div class="gateway-feedback"><p id="gateway-message" class="success" role="status"></p><p id="gateway-error" class="error" role="alert"></p></div>
+          <div class="gateway-metrics"><div><strong id="gateway-model-count">0</strong><span>已同步账号模型</span></div><div><strong id="gateway-credential-status">未配置</strong><span>本地服务密钥</span></div><div><strong>需本机启动</strong><span>当前部署要求</span></div></div>
+          <p class="hint">首次使用：先在原仓库启动 <code>npm run start:standalone</code>，打开其一次性登录链接进行账号授权，再回此页面输入 Forward Key 并同步。同步后可能需要重载 CLIProxyAPI 才能发现新模型。此页不保存任何供应商账号密码。</p>
+        </div>
+        <div class="section-heading"><h2>可接入的账号渠道</h2><span>实际状态由独立服务管理</span></div>
         <div id="account-grid" class="provider-grid"></div>
       </section>
     </main>
