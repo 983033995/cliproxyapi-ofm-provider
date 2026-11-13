@@ -20,7 +20,7 @@
 
 ```bash
 python3 tools/import_dsh_registry.py \
-  --input /path/to/dsh-our-free-model/src/providers/registry.json \
+  --input ./data/dsh-registry.snapshot.json \
   --output ./ofm-providers.json \
   --report ./migration-report.json
 
@@ -30,6 +30,8 @@ CGO_ENABLED=1 go build -buildmode=c-shared -o ofm-provider.so ./cmd/plugin
 ```
 
 导入器生成的所有供应商默认禁用。审查服务商 API 条款、base URL 和模型后，单独将对应的 `enabled` 改为 `true`，使用 `key_env` 指定的环境变量提供凭据。
+
+**模型路由重要提示：** CLIProxyAPI 可能要求选到 `ofm-provider` 类型的 auth 记录后才能进入 executor。已提供 `examples/auth-file.ofm-provider.json` 作为待验证的无密钥标记文件，可在隔离测试环境复制到 CLIProxyAPI 的 auth-dir。实际是否正确进入插件须完成 [Issue #1](https://github.com/983033995/cliproxyapi-ofm-provider/issues/1) 验证，不能仅凭该文件推断已可用。API Key 仍由环境变量读取，不写在该文件中。
 
 在 CLIProxyAPI 宿主进程中设置 `OFM_PROVIDERS_FILE=/绝对路径/ofm-providers.json`，并将 `ofm-provider.so` 放入插件目录。参考 `examples/cliproxyapi-config.v8.yaml`。不要将 API Key 提交到版本库。
 
