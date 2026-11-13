@@ -150,7 +150,7 @@ func dispatch(method string, raw []byte) []byte {
       return fail("invalid_request", "provider registry could not be loaded", 400)
     }
     return ok(map[string]any{
-      "schema_version": 6,
+      "schema_version": 10,
       "metadata": map[string]any{
         "Name": pluginName, "Version": "0.1.0-poc", "Author": "983033995", "ConfigFields": []any{},
         "GitHubRepository": "https://github.com/983033995/cliproxyapi-ofm-provider",
@@ -162,13 +162,15 @@ func dispatch(method string, raw []byte) []byte {
       },
     })
   case "auth.identifier":
-    return ok(map[string]any{"identifier": pluginName})
+    return nativeAuthIdentifierResponse()
   case "auth.parse":
     return parseHostAuth(raw)
   case "auth.refresh":
     return refreshHostAuth(raw)
-  case "auth.login.start", "auth.login.poll":
-    return fail("not_implemented", "Account OAuth flows require provider-specific adapters", 501)
+  case "auth.login.start":
+    return nativeStartLogin(raw)
+  case "auth.login.poll":
+    return nativePollLogin(raw)
   case "management.register":
     return registerManagement()
   case "management.handle":
