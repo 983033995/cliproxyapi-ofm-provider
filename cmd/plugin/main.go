@@ -31,7 +31,6 @@ import (
   "encoding/json"
   "errors"
   "net/http"
-  "os"
   "strings"
   "sync"
   "unsafe"
@@ -129,7 +128,9 @@ func fail(code, message string, status int) []byte {
   return output
 }
 func load() error {
-  loaded, err := provider.LoadFile(os.Getenv("OFM_PROVIDERS_FILE"))
+  cfg, err := readConfig()
+  if err != nil { return err }
+  loaded, err := provider.Validate(cfg)
   if err != nil { return err }
   runtime.Lock()
   runtime.registry = loaded
@@ -149,17 +150,21 @@ func dispatch(method string, raw []byte) []byte {
       return fail("invalid_request", "provider registry could not be loaded", 400)
     }
     return ok(map[string]any{
-      "schema_version": 1,
+      "schema_version": 6,
       "metadata": map[string]any{
         "Name": pluginName, "Version": "0.1.0-poc", "Author": "983033995", "ConfigFields": []any{},
         "GitHubRepository": "https://github.com/983033995/cliproxyapi-ofm-provider",
       },
       "capabilities": map[string]any{
-        "model_registrar": true, "executor": true, "executor_model_scope": "static",
+        "model_registrar": true, "executor": true, "executor_model_scope": "static", "management_api": true,
         "executor_input_formats": []string{"chat-completions"},
         "executor_output_formats": []string{"chat-completions"},
       },
     })
+  case "management.register":
+    return registerManagement()
+  case "management.handle":
+    return handleManagement(raw)
   case "model.register":
     list := []map[string]any{}
     registry := current()
@@ -183,7 +188,7 @@ func dispatch(method string, raw []byte) []byte {
     }
     route, found := current().Resolve(req.Model)
     if !found { return fail("model_not_found", "unknown or disabled OFM model", 404) }
-    key, err := provider.Key(route.Provider)
+    key, err := credentialFor(route.Provider)
     if err != nil { return fail("invalid_api_key", "upstream credential is unavailable", 401) }
     streaming := method == "executor.execute_stream"
     payload, err := provider.Payload(req.Payload, route.Model.ID, streaming)
