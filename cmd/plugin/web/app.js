@@ -358,7 +358,7 @@
     }
     let payload;
     try { payload = await res.json(); } catch (_) { throw Error("CLIProxyAPI OAuth 接口响应不是 JSON"); }
-    if (!res.ok || payload.status === "error") {
+    if (!res.ok) {
       throw Error(payload.error || "原生 OAuth 接口不可用，HTTP " + res.status);
     }
     return payload;
@@ -367,7 +367,7 @@
     const id = "ofm-" + provider;
     const result = await hostOAuthRequest("auth-url?provider=" + encodeURIComponent(id) + "&is_webui=true");
     if (result.status !== "ok" || !result.url || !result.state)
-      throw Error("CLIProxyAPI 未返回有效的授权链接与登录会话状态");
+      throw Error(result.error || "CLIProxyAPI 未返回有效的授权链接与登录会话状态");
     return {login_url:result.url, oauth_state:result.state, native:true};
   }
   async function pollHostOAuth(state) {
