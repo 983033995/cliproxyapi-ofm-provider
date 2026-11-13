@@ -1,5 +1,8 @@
 # Account Channel Bridge: CLIProxyAPI ↔ Our Free Model Standalone
 
+> ⚠️ **历史 POC 文档**：这里记录最初的回环账号桥接实现。当前交付目标已改为**仅服务器端**，不需要个人电脑运行账号服务，不在用户浏览器直接打开服务器 localhost。请优先阅读 [SERVER_DEPLOYMENT.md](SERVER_DEPLOYMENT.md)。
+
+
 ## Core integration
 
 The priority is **account-authenticated model providers** (LobsterAI, Qoder/Qoder CN, TRAE, Cline, Loomy, Raccoon, MiniMax Code, ZCode, Gemini Code Assist), NOT API Key aggregator setup.
