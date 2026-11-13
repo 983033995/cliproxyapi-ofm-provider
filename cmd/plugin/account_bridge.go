@@ -23,6 +23,7 @@ const accountSecretID = "__ofm_standalone_gateway__"
 var accountChannels = map[string]string{
     "lobsterai": "LobsterAI",
     "qoder": "Qoder",
+    "qodercn": "Qoder 中国版",
     "qoder-cn": "Qoder 中国版",
     "qoder_cn": "Qoder 中国版",
     "trae": "TRAE",
@@ -63,7 +64,9 @@ var accounts = struct {
 }{Routes: map[string]accountGatewayRoute{}}
 
 func defaultAccountConfig() accountGatewayConfig {
-    return accountGatewayConfig{BaseURL: "http://127.0.0.1:18900", Models: []accountModel{}}
+    base := strings.TrimSpace(os.Getenv("OFM_ACCOUNT_GATEWAY_URL"))
+    if base == "" { base = "http://127.0.0.1:18900" }
+    return accountGatewayConfig{BaseURL: base, Models: []accountModel{}}
 }
 func safeGatewayURL(raw string) (string, error) {
     raw = strings.TrimSpace(raw)
