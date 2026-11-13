@@ -3,19 +3,21 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const path = "/v0/management/ofm-provider/providers";
-  const model = {key: "", providers: [], filter: "all", query: "", tab: "accounts", selected: null, gateway: null, pendingLogin: null};
+  const model = {key: "", providers: [], filter: "all", query: "", tab: "accounts", selected: null, gateway: null, pendingLogin: null, channelStatuses: {}};
+  let authPollTimer = null;
+  let authPollInFlight = false;
   const secure = location.protocol === "https:" || ["127.0.0.1", "localhost", "::1", "[::1]"].includes(location.hostname);
   const accountChannels = [
-    ["LobsterAI", "有道", "需要账号授权及积分接口"],
-    ["Qoder", "阿里系", "需要账号授权及积分接口"],
-    ["Qoder 中国版", "阿里系", "需要账号授权及积分接口"],
-    ["TRAE", "字节", "需要独立客户端账号适配"],
-    ["Cline", "Cline", "需要独立账号授权适配"],
-    ["Loomy", "讯飞", "需要独立账号授权适配"],
-    ["Raccoon", "商汤", "需要独立账号授权适配"],
-    ["MiniMax Code", "MiniMax", "需要官方授权与额度接口"],
-    ["ZCode", "智谱", "需要独立账号授权适配"],
-    ["Gemini Code Assist", "Google", "需要独立 OAuth 授权适配"]
+    ["LobsterAI", "有道", "回环 OAuth 授权，需要服务器端回调适配"],
+    ["Qoder", "阿里系", "设备码授权 · 登录结果由服务器自动确认"],
+    ["Qoder 中国版", "阿里系", "设备码授权 · 支持远程浏览器登录"],
+    ["TRAE", "字节", "固定回环地址 OAuth 回调，远程适配待完成"],
+    ["Cline", "Cline", "设备码授权 · 支持远程浏览器登录"],
+    ["Loomy", "讯飞", "微信扫码登录需要服务端二维码载体适配"],
+    ["Raccoon", "商汤", "微信扫码及短信登录需要服务端回调适配"],
+    ["MiniMax Code", "MiniMax", "OAuth 设备码及 PKCE · 支持远程浏览器授权"],
+    ["ZCode", "智谱", "浏览器及验证码交互待服务器适配"],
+    ["Gemini Code Assist", "Google", "原生应用回环 OAuth 回调，远程适配待完成"]
   ];
 
   const clear = (node) => { while (node.firstChild) node.removeChild(node.firstChild); };
@@ -89,7 +91,12 @@
     txt.append(el("h3", "", p.name || p.id), el("div", "subheading", planned ? p.owner : p.id));
     ident.append(avatar, txt);
     const status = badges(p);
-    if (planned) { status[0] = (p.models || []).length ? "已同步模型" : "待登录/同步"; status[1] = (p.models || []).length ? "tag live" : "tag"; }
+    if (planned) {
+      const activeAccounts = p.accountStatus?.accounts_enabled ?? 0;
+      const registered = p.accountStatus?.accounts_total ?? 0;
+      status[0] = activeAccounts ? "已登记 " + activeAccounts + " 账号" : registered ? "账号已禁用" : "未授权";
+      status[1] = activeAccounts ? "tag live" : "tag";
+    }
     const tag = el("span", status[1], status[0]);
     top.append(ident, tag);
 
@@ -99,6 +106,12 @@
     const modelCount = el("span", "", "模型 ");
     modelCount.append(el("b", "", String((p.models || []).length)));
     metrics.append(modelCount);
+    if (planned) {
+      const accounts = el("span", "", "账号 ");
+      const count = Number(p.accountStatus?.accounts_total ?? 0);
+      accounts.append(el("b", "", String(count)));
+      metrics.append(accounts);
+    }
     if (!planned) {
       const key = el("span", "", "凭据 ");
       key.append(el("b", p.credential_present ? "ok" : "", p.auth_kind === "none" ? "不需要" :
@@ -158,8 +171,9 @@
     accountChannels.forEach((a, index) => {
       const models = synced.filter((m) => prefixes[index].includes(String(m.id || "").split("/")[0].toLowerCase()));
       const providerID = prefixes[index][0];
+      const accountStatus = model.channelStatuses?.[providerID] || null;
       box.append(card({
-        id: "account-" + index, providerID,
+        id: "account-" + index, providerID, accountStatus,
         remoteLogin: remoteLoginIds.has(providerID),
         name: a[0], owner: a[1], description: a[2],
         format: "account-channel", supported: false, enabled: models.length > 0,
@@ -293,7 +307,15 @@
     $("active").textContent = data.enabled ? "正常" : "未连接";
     $("available").textContent = String(data.connected_models || 0);
     renderAccounts();
+    try { await refreshChannelStatus(); }
+    catch (err) { message("gateway-error", "账号池状态暂不可读取：" + err.message); }
     return data;
+  }
+  async function refreshChannelStatus() {
+    const result = await gatewayRequest("channels/status");
+    model.channelStatuses = result.statuses || {};
+    renderAccounts();
+    return result;
   }
   async function connectGateway() {
     message("gateway-error", "");
