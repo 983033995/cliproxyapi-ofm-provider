@@ -19,3 +19,11 @@ dialog{color:#edf1f8;background:#191e27;border:1px solid #3c4555;border-radius:1
 .gateway-metrics{display:flex;flex-wrap:wrap;gap:38px;margin:16px 0;border-top:1px solid #ffffff11;border-bottom:1px solid #ffffff11;padding:15px 0}
 .gateway-metrics strong{font-size:16px;color:#eff4fc;display:block}.gateway-metrics span{font-size:11px;color:#91a1b0;display:block;margin-top:6px}.gateway-panel .hint{margin:8px 0 0;font-size:11px}
 @media(max-width:800px){.gateway-fields{grid-template-columns:1fr}.gateway-panel{padding:19px}}
+.gateway-login-panel{background:#161e2a;border:1px solid #39536b;padding:22px;border-radius:14px;margin:0 0 24px}
+.gateway-login-panel h3{font-size:19px;margin:11px 0}
+.gateway-login-panel .muted{max-width:810px}
+.gateway-login-panel .gateway-actions{margin:14px 0}
+.account-entries{margin-top:16px;display:grid;gap:8px}
+.account-entry{display:flex;justify-content:space-between;gap:15px;padding:11px 13px;border:1px solid #34414d;background:#151b23;border-radius:8px;font-size:12px;color:#b8c9d8}
+.account-entry span:last-child{color:#8dd5b2}
+@media(max-width:600px){.account-entry{flex-direction:column;gap:6px}}
