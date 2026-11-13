@@ -119,7 +119,8 @@ func gatewayKey() (string, error) {
     secrets, err := readSecretsUnlocked()
     if err != nil { return "", err }
     if key := accountKeyUnlocked(secrets); key != "" { return key, nil }
-    return "", errors.New("standalone runtime's forwardKey has not been configured")
+    if key := strings.TrimSpace(os.Getenv("OFM_ACCOUNT_FORWARD_KEY")); key != "" { return key, nil }
+    return "", errors.New("server account runtime's forwardKey is not configured")
 }
 func accountChannelID(modelID string) (string, bool) {
     first, _, hasSlash := strings.Cut(modelID, "/")
