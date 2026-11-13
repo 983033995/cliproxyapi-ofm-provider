@@ -1,0 +1,10 @@
+.DS_Store
+/ofm-provider.so
+/ofm-provider.h
+/dist/
+/ofm-providers.json
+/migration-report.json
+*.test
+__pycache__/
+*.pyc
+.env
