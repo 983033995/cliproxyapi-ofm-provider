@@ -3,7 +3,7 @@
 (function () {
   const $ = (id) => document.getElementById(id);
   const path = "/v0/management/ofm-provider/providers";
-  const model = {key: "", providers: [], filter: "all", query: "", tab: "providers", selected: null};
+  const model = {key: "", providers: [], filter: "all", query: "", tab: "providers", selected: null, gateway: null};
   const secure = location.protocol === "https:" || ["127.0.0.1", "localhost", "::1", "[::1]"].includes(location.hostname);
   const accountChannels = [
     ["LobsterAI", "有道", "需要账号授权及积分接口"],
@@ -66,6 +66,7 @@
     $("available").textContent = model.providers.filter((p) => p.supported).length;
     $("tab-count").textContent = String(model.providers.length);
     renderCards();
+    try { await refreshGateway(); } catch (err) { message("gateway-error", err.message); }
   }
   function badges(p) {
     if (!p.supported) return ["待适配", "tag unsupported"];
@@ -76,7 +77,7 @@
   function card(p, planned) {
     const card = el("article", "provider-card");
     if (p.enabled && p.connected) card.classList.add("is-live");
-    if (!p.supported || planned) card.classList.add("is-unsupported");
+    if ((!p.supported && !planned) || (planned && !(p.models || []).length)) card.classList.add("is-unsupported");
 
     const top = el("div", "card-top");
     const ident = el("div", "card-identity");
@@ -88,7 +89,7 @@
     txt.append(el("h3", "", p.name || p.id), el("div", "subheading", planned ? p.owner : p.id));
     ident.append(avatar, txt);
     const status = badges(p);
-    if (planned) status[0] = "尚未支持";
+    if (planned) { status[0] = (p.models || []).length ? "已同步模型" : "待登录/同步"; status[1] = (p.models || []).length ? "tag live" : "tag"; }
     const tag = el("span", status[1], status[0]);
     top.append(ident, tag);
 
@@ -105,15 +106,16 @@
       metrics.append(key);
     }
     const actions = el("div", "card-actions");
-    const button = el("button", p.supported && !planned ? "accent" : "", p.supported && !planned ?
-      (p.enabled ? "管理接入" : "接入设置") : "待开发");
+    const button = el("button", p.supported && !planned ? "accent" : "", planned ? "打开账号授权" : p.supported ?
+      (p.enabled ? "管理接入" : "接入设置") : "待适配");
     button.type = "button";
-    if (p.supported && !planned) button.addEventListener("click", () => openEditor(p.id));
+    if (planned) button.addEventListener("click", openAccountConsole);
+    else if (p.supported) button.addEventListener("click", () => openEditor(p.id));
     else {
       button.disabled = true;
       button.title = "需要独立的协议或账号授权适配器，暂不能使用";
     }
-    const tip = el("small", "", planned ? "账号协议待适配" :
+    const tip = el("small", "", planned ? "账号与额度由本地服务管理" :
       (p.credential_source === "local-file" ? "本地私有凭据文件" :
         (p.credential_source === "environment" ? "环境变量凭据" :
           (p.supported ? "启用后需要模型目录重载" : "需额外协议适配"))));
@@ -141,10 +143,19 @@
   function renderAccounts() {
     const box = $("account-grid");
     clear(box);
-    accountChannels.forEach((a, index) => box.append(card({
-      id: "account-" + index, name: a[0], owner: a[1], description: a[2],
-      format: "account-channel", supported: false, enabled: false, connected: false, models: []
-    }, true)));
+    const prefixes = [
+      ["lobsterai"], ["qoder"], ["qoder-cn", "qoder_cn"], ["trae"],
+      ["cline"], ["loomy"], ["raccoon"], ["minimax", "minimax-code"], ["zcode"], ["gemini"]
+    ];
+    const synced = model.gateway?.models || [];
+    accountChannels.forEach((a, index) => {
+      const models = synced.filter((m) => prefixes[index].includes(String(m.id || "").split("/")[0].toLowerCase()));
+      box.append(card({
+        id: "account-" + index, name: a[0], owner: a[1], description: a[2],
+        format: "account-channel", supported: false, enabled: models.length > 0,
+        connected: models.length > 0, models
+      }, true));
+    });
   }
 
   function currentDraft() {
@@ -235,6 +246,80 @@
     } catch (err) { message("editor-error", err.message); }
   }
 
+  function checkedGatewayOrigin(raw) {
+    const u = new URL(raw);
+    const host = u.hostname.toLowerCase();
+    if (u.protocol !== "http:" || !["127.0.0.1", "localhost", "[::1]"].includes(host) ||
+        !u.port || u.username || u.password || u.search || u.hash ||
+        !["", "/"].includes(u.pathname)) throw Error("仅允许同机 localhost / 127.0.0.1 的 HTTP 服务地址");
+    return u.origin;
+  }
+  function openAccountConsole(ev) {
+    try {
+      const raw = $("gateway-url").value.trim() || "http://127.0.0.1:18900";
+      const origin = checkedGatewayOrigin(raw);
+      if (ev && ev.preventDefault) ev.preventDefault();
+      window.open(origin + "/", "_blank", "noopener,noreferrer");
+    } catch (err) { message("gateway-error", err.message); }
+  }
+  async function gatewayRequest(action, payload) {
+    if (!secure) throw Error("远程账号管理需要 HTTPS");
+    const headers = {"X-Management-Key": model.key, "Accept": "application/json"};
+    const method = payload === undefined ? "GET" : "POST";
+    if (payload !== undefined) headers["Content-Type"] = "application/json";
+    const resp = await fetch("/v0/management/ofm-provider/account-gateway" + (action ? "/" + action : ""), {
+      method, headers, body: payload === undefined ? undefined : JSON.stringify(payload),
+      credentials: "same-origin", redirect: "error", cache: "no-store"
+    });
+    if (resp.status === 401 || resp.status === 403) {
+      showLogin("需要重新进行 Management Key 验证");
+      throw Error("管理认证失败");
+    }
+    let data;
+    try { data = await resp.json(); } catch (err) { throw Error("账号管理接口未返回 JSON"); }
+    if (!resp.ok || !data.ok) throw Error(data.message || "账号服务请求失败");
+    return data;
+  }
+  async function refreshGateway() {
+    const data = await gatewayRequest("");
+    model.gateway = data;
+    if (document.activeElement !== $("gateway-url")) $("gateway-url").value = data.base_url || "http://127.0.0.1:18900";
+    $("gateway-status").textContent = data.enabled ? "已配置" : "未连接";
+    $("gateway-status").className = data.enabled ? "tag live" : "tag";
+    $("gateway-model-count").textContent = String(data.connected_models || 0);
+    $("gateway-credential-status").textContent = data.credential_present ? "已配置" : "未配置";
+    const url = checkedGatewayOrigin(data.base_url || "http://127.0.0.1:18900");
+    $("gateway-console").href = url + "/";
+    renderAccounts();
+    return data;
+  }
+  async function connectGateway() {
+    message("gateway-error", "");
+    message("gateway-message", "");
+    const button = $("gateway-connect");
+    button.disabled = true;
+    try {
+      const url = checkedGatewayOrigin($("gateway-url").value.trim());
+      const result = await gatewayRequest("connect", {
+        base_url: url, forward_key: $("gateway-key").value.trim()
+      });
+      $("gateway-key").value = "";
+      message("gateway-message", result.message + "（" + result.model_count + " 个账号渠道模型）");
+      if (!result.host_auth_ready) message("gateway-error", "CLIProxyAPI 的插件 auth 标记保存尚未确认，请参考 README 或 Issue #1 排查。");
+      await refreshGateway();
+    } catch (err) { message("gateway-error", err.message); }
+    finally { button.disabled = false; }
+  }
+  async function disconnectGateway() {
+    if (!confirm("确认断开账号网关并移除本插件保存的 Forward Key？原服务内账号不会退出登录。")) return;
+    try {
+      const res = await gatewayRequest("disconnect", {});
+      $("gateway-key").value = "";
+      message("gateway-message", res.message);
+      await refreshGateway();
+    } catch (err) { message("gateway-error", err.message); }
+  }
+
   function init() {
     renderAccounts();
     if (!secure) {
@@ -272,6 +357,10 @@
     $("editor-form").addEventListener("submit", (ev) => {ev.preventDefault(); void saveEditor();});
     $("test-connection").addEventListener("click", () => void testConnection());
     $("disconnect").addEventListener("click", () => void disconnect());
+    $("gateway-connect").addEventListener("click", () => void connectGateway());
+    $("gateway-refresh").addEventListener("click", () => void connectGateway());
+    $("gateway-disconnect").addEventListener("click", () => void disconnectGateway());
+    $("gateway-console").addEventListener("click", (event) => openAccountConsole(event));
     $("credentials").addEventListener("cancel", (ev) => {
       if (!model.key) ev.preventDefault();
     });
