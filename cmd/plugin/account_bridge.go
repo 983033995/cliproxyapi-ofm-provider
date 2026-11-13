@@ -9,7 +9,6 @@ import (
     "encoding/json"
     "errors"
     "fmt"
-    "net"
     "net/url"
     "os"
     "path/filepath"
@@ -76,9 +75,8 @@ func safeGatewayURL(raw string) (string, error) {
         return "", errors.New("Account Gateway must be a local HTTP loopback origin")
     }
     host := parsed.Hostname()
-    if host != "localhost" {
-        ip := net.ParseIP(host)
-        if ip == nil || !ip.IsLoopback() { return "", errors.New("account gateway must use localhost / 127.0.0.1 / ::1") }
+    if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+        return "", errors.New("account gateway must use localhost / 127.0.0.1 / ::1")
     }
     if parsed.Port() == "" { return "", errors.New("specify the standalone runtime's real listening port") }
     return strings.TrimRight(parsed.String(), "/"), nil
