@@ -10,3 +10,12 @@ dialog{color:#edf1f8;background:#191e27;border:1px solid #3c4555;border-radius:1
 @media(max-width:800px){.page{padding:0 17px}.hero{padding:25px;align-items:stretch;flex-direction:column}.stat-row{justify-content:space-between;padding-top:12px}.provider-grid{grid-template-columns:1fr}.toolbar{flex-direction:column;align-items:stretch}.searchfield{max-width:none}.filters{width:100%;overflow-x:auto;flex-wrap:nowrap}.filters .chip{white-space:nowrap}}
 @media(max-width:480px){.topbar{min-height:75px}.beta{display:none}.hero h1{font-size:25px}.tab{padding:13px 11px;font-size:12px}.modal-actions.spread{flex-direction:column-reverse}.actions-right{justify-content:flex-end}.card-metrics{gap:11px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+.gateway-panel{border:1px solid #344759;border-radius:15px;padding:25px;background:linear-gradient(130deg,#172130,#161c24 70%,#14231e);margin:0 0 27px}
+.gateway-header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}.gateway-header h3{margin:10px 0 7px;font-size:20px}.gateway-header p{color:#aebbc9;font-size:12px;line-height:1.75;max-width:610px;margin:0 0 12px}
+.gateway-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}.gateway-field label{font-size:12px;font-weight:600;color:#c3d2df;display:block;margin-bottom:9px}.gateway-field input{width:100%;background:#101823;border:1px solid #415267;border-radius:9px;color:#f1f6fc;padding:13px;outline:none;font-size:13px}.gateway-field input:focus{border-color:#7aaae9}
+.gateway-actions{display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin-top:18px}.gateway-actions button,.gateway-actions .link-button{font-size:12px;padding:10px 13px;text-decoration:none;border-radius:8px;white-space:nowrap}
+.gateway-actions .link-button{display:inline-flex;align-items:center;border:1px solid #495b72}
+.gateway-feedback{display:flex;gap:15px;flex-wrap:wrap}.gateway-feedback p{margin:10px 0 0}
+.gateway-metrics{display:flex;flex-wrap:wrap;gap:38px;margin:16px 0;border-top:1px solid #ffffff11;border-bottom:1px solid #ffffff11;padding:15px 0}
+.gateway-metrics strong{font-size:16px;color:#eff4fc;display:block}.gateway-metrics span{font-size:11px;color:#91a1b0;display:block;margin-top:6px}.gateway-panel .hint{margin:8px 0 0;font-size:11px}
+@media(max-width:800px){.gateway-fields{grid-template-columns:1fr}.gateway-panel{padding:19px}}
