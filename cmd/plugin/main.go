@@ -156,11 +156,19 @@ func dispatch(method string, raw []byte) []byte {
         "GitHubRepository": "https://github.com/983033995/cliproxyapi-ofm-provider",
       },
       "capabilities": map[string]any{
-        "model_registrar": true, "executor": true, "executor_model_scope": "static", "management_api": true,
+        "model_registrar": true, "executor": true, "executor_model_scope": "static", "management_api": true, "auth_provider": true,
         "executor_input_formats": []string{"chat-completions"},
         "executor_output_formats": []string{"chat-completions"},
       },
     })
+  case "auth.identifier":
+    return ok(map[string]any{"identifier": pluginName})
+  case "auth.parse":
+    return parseHostAuth(raw)
+  case "auth.refresh":
+    return refreshHostAuth(raw)
+  case "auth.login.start", "auth.login.poll":
+    return fail("not_implemented", "Account OAuth flows require provider-specific adapters", 501)
   case "management.register":
     return registerManagement()
   case "management.handle":
