@@ -58,6 +58,7 @@ func registerManagement() []byte {
         {"POST", "/ofm-provider/account-gateway/connect"},
         {"POST", "/ofm-provider/account-gateway/test"},
         {"POST", "/ofm-provider/account-gateway/disconnect"},
+        {"GET", "/ofm-provider/account-gateway/channels/status"},
         {"POST", "/ofm-provider/account-gateway/accounts"},
         {"POST", "/ofm-provider/account-gateway/login/start"},
         {"POST", "/ofm-provider/account-gateway/login/poll"},
@@ -106,6 +107,8 @@ func handleManagement(raw []byte) []byte {
         return managementResponse(200, "text/css; charset=utf-8", dashboardCSS)
     case "GET /v0/resource/plugins/ofm-provider/app.js":
         return managementResponse(200, "text/javascript; charset=utf-8", dashboardJS)
+    case "GET /v0/management/ofm-provider/account-gateway/channels/status":
+        return serverChannelStatus(req.HostCallbackID)
     case "POST /v0/management/ofm-provider/account-gateway/accounts":
         return serverAccountList(req.Body,req.HostCallbackID)
     case "POST /v0/management/ofm-provider/account-gateway/login/start":
