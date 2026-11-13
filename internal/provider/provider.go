@@ -62,7 +62,7 @@ func Validate(cfg Config) (Registry, error) {
   result := Registry{Routes: make(map[string]Route)}
   seen := map[string]bool{}
   for _, p := range cfg.Providers {
-    if p.ID == "" || strings.ContainsAny(p.ID, "/ \?&#") || seen[p.ID] {
+    if p.ID == "" || strings.ContainsAny(p.ID, "/ ?&#") || seen[p.ID] {
       return Registry{}, fmt.Errorf("invalid or duplicate provider id %q", p.ID)
     }
     seen[p.ID] = true
@@ -84,8 +84,7 @@ func Validate(cfg Config) (Registry, error) {
     for k, v := range p.Headers {
       lower := strings.ToLower(strings.TrimSpace(k))
       if lower == "authorization" || lower == "x-api-key" || lower == "host" ||
-        lower == "content-length" || lower == "content-type" || strings.ContainsAny(k+v, "
-") ||
+        lower == "content-length" || lower == "content-type" || strings.ContainsRune(k+v, rune(13)) || strings.ContainsRune(k+v, rune(10)) ||
         strings.Contains(k, ":") {
         return Registry{}, fmt.Errorf("provider %s: forbidden header %q", p.ID, k)
       }
