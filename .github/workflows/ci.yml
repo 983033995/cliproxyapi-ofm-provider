@@ -1,0 +1,27 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Unit test Go registry and routing
+        run: go test ./...
+      - name: Test pinned DSH registry importer
+        run: python3 -m unittest discover -s tests -v
+      - name: Build ABI 1 c-shared plugin (linux amd64)
+        env:
+          CGO_ENABLED: "1"
+          GOAMD64: v1
+          CGO_CFLAGS: -march=x86-64
+        run: |
+          go build -buildmode=c-shared -o ofm-provider.so ./cmd/plugin
+          go version -m ofm-provider.so
+          nm -D ofm-provider.so | grep cliproxy_plugin_init
+      - name: Reminder
+        run: echo 'Smoke tests do not establish actual CLIProxyAPI host / auth routing / upstream protocol compatibility'
