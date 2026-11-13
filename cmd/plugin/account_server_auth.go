@@ -72,8 +72,7 @@ func safeRemoteLoginURL(raw string) bool {
  host:=strings.ToLower(u.Hostname())
  if host=="localhost"||strings.HasSuffix(host,".localhost")||strings.HasSuffix(host,".local"){return false}
  if ip:=net.ParseIP(host);ip!=nil{return false}
- if strings.ContainsAny(raw,"
-	"){return false}
+ if strings.ContainsRune(raw,rune(13)) || strings.ContainsRune(raw,rune(10)) || strings.ContainsRune(raw,rune(9)) {return false}}
  return true
 }
 func validAccountID(id string) bool {
