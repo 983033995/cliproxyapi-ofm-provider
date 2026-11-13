@@ -1,0 +1,5 @@
+{
+  "type": "ofm-provider",
+  "label": "OFM Provider (external credentials from environment)",
+  "disabled": false
+}
